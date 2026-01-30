@@ -275,26 +275,45 @@ docker_cleanup_task() {
 # ============================================
 log_rotation_task() {
     local MAX_SIZE=10485760  # 10MB
+    local ROTATED_COUNT=0
+    local DELETED_COUNT=0
 
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] [LOGS] Rotating logs..."
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] [LOGS] Starting log rotation..."
+    update_status "Log Rotation" "running" "Checking log files..."
 
+    # Check and rotate large logs
     for logfile in "$LOG_DIR"/*.log; do
         if [ -f "$logfile" ]; then
             local size=$(stat -f%z "$logfile" 2>/dev/null || echo 0)
+            local size_mb=$((size / 1048576))
+
             if [ "$size" -gt "$MAX_SIZE" ]; then
-                # Rotate
-                mv "$logfile" "${logfile}.1" 2>/dev/null
-                touch "$logfile"
-                gzip "${logfile}.1" 2>/dev/null
-                echo "[$(date '+%Y-%m-%d %H:%M:%S')] [LOGS] Rotated: $(basename $logfile)"
+                echo "[$(date '+%Y-%m-%d %H:%M:%S')] [LOGS] Rotating $(basename $logfile) (${size_mb}MB)"
+
+                if mv "$logfile" "${logfile}.1" 2>/dev/null && touch "$logfile" && gzip "${logfile}.1" 2>/dev/null; then
+                    ROTATED_COUNT=$((ROTATED_COUNT + 1))
+                    echo "[$(date '+%Y-%m-%d %H:%M:%S')] [LOGS] ✓ Rotated: $(basename $logfile)"
+                else
+                    echo "[$(date '+%Y-%m-%d %H:%M:%S')] [LOGS] ⚠️  Failed to rotate: $(basename $logfile)"
+                fi
             fi
         fi
     done
 
-    # Cleanup old logs (>30 days)
+    # Cleanup old rotated logs (>30 days)
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] [LOGS] Cleaning up old rotated logs..."
+    DELETED_COUNT=$(find "$LOG_DIR" -name "*.log.*.gz" -mtime +30 -type f 2>/dev/null | wc -l | tr -d ' ')
     find "$LOG_DIR" -name "*.log.*.gz" -mtime +30 -delete 2>/dev/null
 
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] [LOGS] ✅ Rotation complete"
+    # Build status message
+    if [ "$ROTATED_COUNT" -gt 0 ] || [ "$DELETED_COUNT" -gt 0 ]; then
+        local message="Rotated: ${ROTATED_COUNT} files, Deleted: ${DELETED_COUNT} old files"
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] [LOGS] ✅ $message"
+        update_status "Log Rotation" "success" "$message"
+    else
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] [LOGS] ✅ All logs within size limits"
+        update_status "Log Rotation" "success" "No rotation needed (all logs < 10MB)"
+    fi
 }
 
 # ============================================
