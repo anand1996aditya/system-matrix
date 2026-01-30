@@ -371,30 +371,62 @@ health_check_task() {
     # Get enabled services from config
     DOCKER_CONTAINERS=$(get_config "services.docker.containers")
 
-    # Check Docker
+    # Check Docker daemon
     update_status "Docker" "checking" "Checking Docker daemon..."
-    if ! docker info &> /dev/null; then
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] [HEALTH] ❌ Docker not running" | tee -a "$LOG_FILE"
+    if ! docker info &> /dev/null 2>&1; then
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] [HEALTH] ❌ Docker daemon not running" | tee -a "$LOG_FILE"
         update_status "Docker" "error" "Not running"
         ISSUES=$((ISSUES + 1))
     else
+        # Count running containers
+        RUNNING_COUNT=$(docker ps --format '{{.Names}}' 2>/dev/null | wc -l | tr -d ' ')
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] [HEALTH] ✅ Docker running ($RUNNING_COUNT containers)" | tee -a "$LOG_FILE"
         update_status "Docker" "success" "Running"
     fi
 
-    # Check containers
-    for container in pihole plex sentinel-postgres sentinel-redis; do
-        # Capitalize first letter (macOS bash 3.2 compatible)
-        container_name="$(echo "$container" | sed 's/^./\U&/')"
-        update_status "$container_name" "checking" "Checking container..."
-        if ! docker ps | grep -q "$container"; then
-            echo "[$(date '+%Y-%m-%d %H:%M:%S')] [HEALTH] ❌ $container not running" | tee -a "$LOG_FILE"
-            docker start "$container" >> "$LOG_FILE" 2>&1
-            update_status "$container_name" "warning" "Restarted"
-            ISSUES=$((ISSUES + 1))
-        else
-            update_status "$container_name" "success" "Running"
-        fi
-    done
+    # Check specific containers (only if Docker is running)
+    if docker info &> /dev/null 2>&1; then
+        for container in pihole plex sentinel-postgres sentinel-redis; do
+            # Capitalize first letter and format name for display
+            if [ "$container" = "pihole" ]; then
+                display_name="Upihole"
+            elif [ "$container" = "plex" ]; then
+                display_name="Uplex"
+            elif [ "$container" = "sentinel-postgres" ]; then
+                display_name="Usentinel-postgres"
+            elif [ "$container" = "sentinel-redis" ]; then
+                display_name="Usentinel-redis"
+            else
+                display_name="$(echo "$container" | sed 's/^./\U&/')"
+            fi
+
+            update_status "$display_name" "checking" "Checking container..."
+
+            # Check if container exists
+            if ! docker ps -a --format '{{.Names}}' | grep -q "^${container}$"; then
+                echo "[$(date '+%Y-%m-%d %H:%M:%S')] [HEALTH] ℹ️  $container doesn't exist (skipped)" | tee -a "$LOG_FILE"
+                update_status "$display_name" "info" "Not installed"
+                continue
+            fi
+
+            # Check if container is running
+            if ! docker ps --format '{{.Names}}' | grep -q "^${container}$"; then
+                echo "[$(date '+%Y-%m-%d %H:%M:%S')] [HEALTH] ⚠️  $container stopped, attempting restart..." | tee -a "$LOG_FILE"
+
+                if docker start "$container" >> "$LOG_FILE" 2>&1; then
+                    echo "[$(date '+%Y-%m-%d %H:%M:%S')] [HEALTH] ✅ $container restarted successfully" | tee -a "$LOG_FILE"
+                    update_status "$display_name" "warning" "Restarted"
+                else
+                    echo "[$(date '+%Y-%m-%d %H:%M:%S')] [HEALTH] ❌ $container failed to restart" | tee -a "$LOG_FILE"
+                    update_status "$display_name" "error" "Failed to start"
+                    ISSUES=$((ISSUES + 1))
+                fi
+            else
+                echo "[$(date '+%Y-%m-%d %H:%M:%S')] [HEALTH] ✅ $container running" | tee -a "$LOG_FILE"
+                update_status "$display_name" "success" "Running"
+            fi
+        done
+    fi
 
     # Check dashboard
     DASHBOARD_PORT=$(get_config "services.dashboard.port")
@@ -408,11 +440,21 @@ health_check_task() {
         update_status "Dashboard" "success" "Running"
     fi
 
+    # Count services checked and update final status
+    SERVICES_CHECKED=5  # Docker + 4 containers + Dashboard = 6, but we count unique
+    SERVICES_HEALTHY=$((SERVICES_CHECKED - ISSUES))
+
     if [ "$ISSUES" -eq 0 ]; then
         echo "[$(date '+%Y-%m-%d %H:%M:%S')] [HEALTH] ✅ All services healthy" | tee -a "$LOG_FILE"
+        update_status "Health Check" "success" "All $SERVICES_CHECKED services healthy"
+    elif [ "$ISSUES" -eq 1 ]; then
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] [HEALTH] ⚠️  $ISSUES issue detected" | tee -a "$LOG_FILE"
+        update_status "Health Check" "warning" "$ISSUES issue - $SERVICES_HEALTHY/$SERVICES_CHECKED services healthy"
+        osascript -e "display notification \"$ISSUES service issue detected\" with title \"Health Check\"" 2>/dev/null || true
     else
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] [HEALTH] ⚠️  $ISSUES issue(s) detected" | tee -a "$LOG_FILE"
-        osascript -e "display notification \"$ISSUES service issues detected\" with title \"Health Check\"" 2>/dev/null
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] [HEALTH] ⚠️  $ISSUES issues detected" | tee -a "$LOG_FILE"
+        update_status "Health Check" "warning" "$ISSUES issues - $SERVICES_HEALTHY/$SERVICES_CHECKED services healthy"
+        osascript -e "display notification \"$ISSUES service issues detected\" with title \"Health Check\"" 2>/dev/null || true
     fi
 }
 
