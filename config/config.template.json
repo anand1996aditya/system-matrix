@@ -104,14 +104,14 @@
       "enabled": true,
       "schedule": "Daily at 3:00 AM",
       "tasks": {
-        "_comment": "Tasks are auto-enabled based on installed services. Manual override available.",
+        "_comment": "All tasks enabled - services are checked for availability before running",
         "backup": true,
-        "docker_cleanup": "auto",
+        "docker_cleanup": true,
         "log_rotation": true,
-        "pihole_update": "auto",
+        "pihole_update": true,
         "health_check": true,
         "performance_check": true,
-        "external_drives_check": "auto"
+        "external_drives_check": true
       },
       "timeouts": {
         "docker_cleanup": 60,
