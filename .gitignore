@@ -235,3 +235,10 @@ _site/
 *.tgz
 *.rar
 *.7z
+
+# Logs
+logs/
+*.log
+
+# Temporary directories
+${HOME}/

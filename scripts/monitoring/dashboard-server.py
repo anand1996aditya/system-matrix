@@ -1042,7 +1042,22 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
                     with open(status_file, 'r') as f:
                         status_data = json.load(f)
                 else:
-                    status_data = {'running': False, 'tasks': {}}
+                    # Return default structure with pre-populated services
+                    status_data = {
+                        'running': False,
+                        'started': None,
+                        'ended': None,
+                        'completed': None,
+                        'never_run': True,
+                        'tasks': {
+                            'Dashboard Server': {'status': 'not_checked', 'message': 'Web dashboard LaunchAgent', 'timestamp': ''},
+                            'Unified Automation': {'status': 'not_checked', 'message': 'Daily automation scheduler', 'timestamp': ''},
+                            'Docker': {'status': 'not_checked', 'message': 'Container runtime', 'timestamp': ''},
+                            'Colima': {'status': 'not_checked', 'message': 'Docker VM for macOS', 'timestamp': ''},
+                            'Tailscale': {'status': 'not_checked', 'message': 'VPN network', 'timestamp': ''},
+                            'Pi-hole': {'status': 'not_checked', 'message': 'DNS ad blocker', 'timestamp': ''}
+                        }
+                    }
 
                 self.send_response(200)
                 self.send_header('Content-type', 'application/json')

@@ -1399,19 +1399,8 @@
                         <div class="card">
                             <div class="card-title">🤖 AUTOMATION</div>
 
-                            <div class="metric">
-                                <span class="metric-label">UNIFIED SCRIPT</span>
-                                <span class="metric-value">${data.automation.unified_script.status?.running ? '🔄 RUNNING' : '✓ READY'}</span>
-                            </div>
-
-                            <!-- Start and End Times -->
-                            <div style="color: #00AA33; font-size: 0.75em; margin-top: 5px; line-height: 1.4;">
-                                ${data.automation.unified_script.status?.started ?
-                                    `<div>▶ Started: ${data.automation.unified_script.status.started}</div>` : ''}
-                                ${data.automation.unified_script.status?.ended ?
-                                    `<div>■ Ended: ${data.automation.unified_script.status.ended}</div>` : ''}
-                                ${!data.automation.unified_script.status?.started ?
-                                    `<div>Last Run: ${data.automation.unified_script.last_run}</div>` : ''}
+                            <div style="color: #00AA33; font-size: 0.75em; margin-bottom: 8px;">
+                                Daily automated tasks and maintenance
                             </div>
 
                             <div style="margin-top: 8px;">
@@ -1421,13 +1410,18 @@
                             <!-- Live Automation Status -->
                             ${data.automation.unified_script.status?.tasks ? `
                             <div style="margin-top: 10px; border-top: 1px solid #00AA33; padding-top: 8px;">
+                                <!-- Status Header -->
+                                <div style="color: ${data.automation.unified_script.status.running ? '#00FFFF' : '#00AA33'}; font-size: 0.7em; margin-bottom: 6px; opacity: 0.8;">
+                                    ▸ STATUS: ${data.automation.unified_script.status.running ? 'RUNNING...' : 'READY'}
+                                </div>
+
                                 <!-- Progress Bar (if running) -->
                                 ${data.automation.unified_script.status.running ? `
                                 <div style="margin-bottom: 8px;">
                                     <div style="display: flex; justify-content: space-between; margin-bottom: 4px; align-items: center;">
                                         <span style="color: #00FFFF; font-size: 0.8em; font-weight: bold;">
-                                            <span class="status-dot status-warning" style="display: inline-block; margin-right: 5px;"></span>
-                                            PROGRESS
+                                            <span class="status-dot status-warning" style="display: inline-block; margin-right: 5px; width: 8px; height: 8px; border-radius: 50%; background: #00FFFF; animation: pulse 1s infinite;"></span>
+                                            PROGRESS: ${data.automation.unified_script.status.current_task || 'Processing...'}
                                         </span>
                                         <span style="color: #00FF41; font-size: 0.8em; font-weight: bold;">${data.automation.unified_script.status.progress || 0}%</span>
                                     </div>
@@ -1441,7 +1435,7 @@
                                 <div style="color: #00FFFF; font-size: 0.75em; margin-bottom: 5px; font-weight: bold;">TASKS:</div>
                                 <div style="font-size: 0.75em; max-height: 200px; overflow-y: auto;">
                                     ${Object.entries(data.automation.unified_script.status.tasks).map(([taskName, taskInfo]) => {
-                                        let icon = '⏳'; // pending/waiting
+                                        let icon = '⏳';
                                         let color = '#888';
                                         if (taskInfo.status === 'success' || taskInfo.status === 'completed') {
                                             icon = '✅';
@@ -1461,6 +1455,12 @@
                                         } else if (taskInfo.status === 'idle') {
                                             icon = '💤';
                                             color = '#555';
+                                        } else if (taskInfo.status === 'pending') {
+                                            icon = '⏳';
+                                            color = '#888';
+                                        } else if (taskInfo.status === 'info') {
+                                            icon = 'ℹ️';
+                                            color = '#00FFFF';
                                         }
 
                                         return `
@@ -1474,8 +1474,43 @@
                                         `;
                                     }).join('')}
                                 </div>
+
+                                <!-- Start and End Times at Bottom -->
+                                ${data.automation.unified_script.status?.started || data.automation.unified_script.status?.ended || data.automation.unified_script.last_run ? `
+                                <div style="margin-top: 10px; padding-top: 8px; border-top: 1px solid rgba(0, 170, 51, 0.3);">
+                                    <div style="color: #00AA33; font-size: 0.7em; line-height: 1.5;">
+                                        ${data.automation.unified_script.status?.started ?
+                                            `<div>▶ Started: ${data.automation.unified_script.status.started}</div>` : ''}
+                                        ${data.automation.unified_script.status?.ended ?
+                                            `<div>■ Ended: ${data.automation.unified_script.status.ended}</div>` : ''}
+                                        ${!data.automation.unified_script.status?.started && data.automation.unified_script.last_run ?
+                                            `<div>⏱ Last Run: ${data.automation.unified_script.last_run}</div>` : ''}
+                                    </div>
+                                </div>
+                                ` : ''}
+
+                                <!-- Completion Summary -->
+                                ${!data.automation.unified_script.status.running && data.automation.unified_script.status?.ended ? `
+                                <div style="margin-top: 10px; padding: 8px; background: rgba(0, 50, 0, 0.3); border: 1px solid #00FF41; border-radius: 3px;">
+                                    <div style="color: #00FF41; font-size: 0.8em; font-weight: bold; text-align: center; margin-bottom: 4px;">
+                                        ✓ AUTOMATION COMPLETED
+                                    </div>
+                                    <div style="color: #00AA33; font-size: 0.7em; text-align: center;">
+                                        ${data.automation.unified_script.status.ended}
+                                    </div>
+                                </div>
+                                ` : ''}
                             </div>
-                            ` : ''}
+                            ` : `
+                            <div style="margin-top: 10px; border-top: 1px solid #00AA33; padding-top: 8px;">
+                                <div style="color: #00AA33; font-size: 0.7em; margin-bottom: 6px; opacity: 0.8;">▸ STATUS: READY</div>
+                                <div style="color: #00AA33; font-size: 0.75em; line-height: 1.5;">
+                                    ${data.automation.unified_script.last_run ?
+                                        `<div>⏱ Last Run: ${data.automation.unified_script.last_run}</div>` :
+                                        '<div style="color: #888; text-align: center; padding: 10px;">Not yet run</div>'}
+                                </div>
+                            </div>
+                            `}
 
                         </div>
 
@@ -1491,8 +1526,99 @@
                                 <button class="service-btn" onclick="triggerStartupCheck()" style="width: 100%; background: rgba(0, 100, 100, 0.4);">▶ CHECK SERVICES</button>
                             </div>
 
-                            <!-- Live Startup Status -->
-                            <div id="startup-status-container"></div>
+                            <!-- Startup Services Checklist -->
+                            <div style="margin-top: 10px; border-top: 1px solid #00AA33; padding-top: 8px;">
+                                <!-- Status Header -->
+                                <div id="startup-status-header" style="color: #00AA33; font-size: 0.7em; margin-bottom: 6px; opacity: 0.8;">▸ STATUS: Not yet checked</div>
+
+                                <!-- Progress Bar (hidden by default) -->
+                                <div id="startup-progress-bar" style="display: none; margin-bottom: 8px;">
+                                    <div style="display: flex; justify-content: space-between; margin-bottom: 4px; align-items: center;">
+                                        <span id="startup-progress-text" style="color: #00FFFF; font-size: 0.8em; font-weight: bold;">
+                                            <span class="status-dot status-warning" style="display: inline-block; margin-right: 5px; width: 8px; height: 8px; border-radius: 50%; background: #00FFFF; animation: pulse 1s infinite;"></span>
+                                            PROGRESS: <span id="startup-progress-task">Checking...</span>
+                                        </span>
+                                        <span id="startup-progress-percent" style="color: #00FF41; font-size: 0.8em; font-weight: bold;">0%</span>
+                                    </div>
+                                    <div style="width: 100%; height: 16px; background: rgba(0, 50, 0, 0.5); border: 2px solid #00AA33; border-radius: 3px; overflow: hidden;">
+                                        <div id="startup-progress-fill" style="height: 100%; background: linear-gradient(90deg, #00AA33 0%, #00FF41 50%, #00FFFF 100%); width: 0%; transition: width 0.5s ease; box-shadow: 0 0 10px #00FF41;"></div>
+                                    </div>
+                                </div>
+
+                                <!-- Services Header -->
+                                <div style="color: #00FFFF; font-size: 0.75em; margin-bottom: 5px; font-weight: bold;">SERVICES:</div>
+
+                                <!-- Services List -->
+                                <div style="font-size: 0.75em;">
+                                    <!-- Dashboard Server -->
+                                    <div class="startup-service-item" data-service="Dashboard Server" style="display: flex; align-items: start; padding: 4px 0; border-bottom: 1px solid rgba(0, 170, 51, 0.2);">
+                                        <span class="service-icon" style="margin-right: 6px; font-size: 1.1em;">⊙</span>
+                                        <div style="flex: 1;">
+                                            <div class="service-name" style="color: #00AA33; font-weight: bold;">Dashboard Server</div>
+                                            <div class="service-message" style="color: #006600; font-size: 0.9em; opacity: 0.8;">Web dashboard LaunchAgent</div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Unified Automation -->
+                                    <div class="startup-service-item" data-service="Unified Automation" style="display: flex; align-items: start; padding: 4px 0; border-bottom: 1px solid rgba(0, 170, 51, 0.2);">
+                                        <span class="service-icon" style="margin-right: 6px; font-size: 1.1em;">⊙</span>
+                                        <div style="flex: 1;">
+                                            <div class="service-name" style="color: #00AA33; font-weight: bold;">Unified Automation</div>
+                                            <div class="service-message" style="color: #006600; font-size: 0.9em; opacity: 0.8;">Daily automation scheduler</div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Docker -->
+                                    <div class="startup-service-item" data-service="Docker" style="display: flex; align-items: start; padding: 4px 0; border-bottom: 1px solid rgba(0, 170, 51, 0.2);">
+                                        <span class="service-icon" style="margin-right: 6px; font-size: 1.1em;">⊙</span>
+                                        <div style="flex: 1;">
+                                            <div class="service-name" style="color: #00AA33; font-weight: bold;">Docker</div>
+                                            <div class="service-message" style="color: #006600; font-size: 0.9em; opacity: 0.8;">Container runtime</div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Colima -->
+                                    <div class="startup-service-item" data-service="Colima" style="display: flex; align-items: start; padding: 4px 0; border-bottom: 1px solid rgba(0, 170, 51, 0.2);">
+                                        <span class="service-icon" style="margin-right: 6px; font-size: 1.1em;">⊙</span>
+                                        <div style="flex: 1;">
+                                            <div class="service-name" style="color: #00AA33; font-weight: bold;">Colima</div>
+                                            <div class="service-message" style="color: #006600; font-size: 0.9em; opacity: 0.8;">Docker VM for macOS</div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Tailscale -->
+                                    <div class="startup-service-item" data-service="Tailscale" style="display: flex; align-items: start; padding: 4px 0; border-bottom: 1px solid rgba(0, 170, 51, 0.2);">
+                                        <span class="service-icon" style="margin-right: 6px; font-size: 1.1em;">⊙</span>
+                                        <div style="flex: 1;">
+                                            <div class="service-name" style="color: #00AA33; font-weight: bold;">Tailscale</div>
+                                            <div class="service-message" style="color: #006600; font-size: 0.9em; opacity: 0.8;">VPN network</div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Pi-hole -->
+                                    <div class="startup-service-item" data-service="Pi-hole" style="display: flex; align-items: start; padding: 4px 0; border-bottom: 1px solid rgba(0, 170, 51, 0.2);">
+                                        <span class="service-icon" style="margin-right: 6px; font-size: 1.1em;">⊙</span>
+                                        <div style="flex: 1;">
+                                            <div class="service-name" style="color: #00AA33; font-weight: bold;">Pi-hole</div>
+                                            <div class="service-message" style="color: #006600; font-size: 0.9em; opacity: 0.8;">DNS ad blocker</div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Completion Summary (hidden by default) -->
+                                <div id="startup-completion-summary" style="display: none; margin-top: 10px; padding: 8px; background: rgba(0, 50, 0, 0.3); border: 1px solid #00FF41; border-radius: 3px;">
+                                    <div style="color: #00FF41; font-size: 0.8em; font-weight: bold; text-align: center; margin-bottom: 4px;">
+                                        <span id="startup-summary-icon">✓</span> CHECK COMPLETED
+                                    </div>
+                                    <div id="startup-summary-time" style="color: #00AA33; font-size: 0.7em; text-align: center;"></div>
+                                    <div id="startup-summary-stats" style="color: #00FF41; font-size: 0.7em; text-align: center; margin-top: 4px;"></div>
+                                </div>
+
+                                <!-- Help Text -->
+                                <div id="startup-help-text" style="color: #00AA33; font-size: 0.7em; margin-top: 8px; text-align: center; padding: 6px; border: 1px dashed #00AA33; border-radius: 3px; opacity: 0.7;">
+                                    Click <strong>"CHECK SERVICES"</strong> above to verify all services
+                                </div>
+                            </div>
                         </div>
 
                         <!-- Backups -->
@@ -2335,18 +2461,14 @@
                 btn.innerHTML = '⏳ STARTING...';
                 btn.disabled = true;
 
-                // Show immediate feedback
-                const container = document.getElementById('startup-status-container');
-                container.innerHTML = `
-                    <div style="margin-top: 10px; border-top: 1px solid #00AA33; padding: 10px; text-align: center;">
-                        <div style="color: #00FFFF; font-size: 0.9em; margin-bottom: 8px;">
-                            <span style="animation: pulse 1s infinite;">🔄</span> Initiating service check...
-                        </div>
-                        <div style="color: #00AA33; font-size: 0.75em;">
-                            This will verify Dashboard, Automation, Docker, Tailscale, and more
-                        </div>
-                    </div>
-                `;
+                // Update status header to show starting
+                const statusHeader = document.getElementById('startup-status-header');
+                statusHeader.textContent = '▸ STATUS: Initiating check...';
+                statusHeader.style.color = '#00FFFF';
+
+                // Hide help text and summary while starting
+                document.getElementById('startup-help-text').style.display = 'none';
+                document.getElementById('startup-completion-summary').style.display = 'none';
 
                 const response = await fetch('/api/startup/trigger', {
                     method: 'POST',
@@ -2355,24 +2477,15 @@
                 });
 
                 const result = await response.json();
-
                 console.log('Startup trigger result:', result);
 
                 if (result.success) {
-                    container.innerHTML = `
-                        <div style="margin-top: 10px; border-top: 1px solid #00AA33; padding: 10px; text-align: center;">
-                            <div style="color: #00FF41; font-size: 0.9em;">
-                                ✓ Service check started!
-                            </div>
-                            <div style="color: #00AA33; font-size: 0.75em; margin-top: 5px;">
-                                Watch below for live progress...
-                            </div>
-                        </div>
-                    `;
+                    // Start monitoring - will update status automatically
                     startStartupMonitoring();
                 } else {
                     alert(`❌ ${result.message}`);
-                    container.innerHTML = '<div style="color: #FF0000; margin-top: 10px; padding: 10px; text-align: center;">❌ ' + result.message + '</div>';
+                    statusHeader.textContent = '▸ STATUS: Failed to start';
+                    statusHeader.style.color = '#FF0000';
                 }
 
                 setTimeout(() => {
@@ -2385,8 +2498,10 @@
                 alert(`❌ Failed to trigger startup check: ${error.message}`);
                 event.target.innerHTML = '▶ CHECK SERVICES';
                 event.target.disabled = false;
-                const container = document.getElementById('startup-status-container');
-                container.innerHTML = '<div style="color: #FF0000; margin-top: 10px; padding: 10px; text-align: center;">❌ Error: ' + error.message + '</div>';
+
+                const statusHeader = document.getElementById('startup-status-header');
+                statusHeader.textContent = '▸ STATUS: Error - ' + error.message;
+                statusHeader.style.color = '#FF0000';
             }
         }
 
@@ -2404,172 +2519,173 @@
                 }
 
                 const data = await response.json();
+                console.log('Startup status data:', data);
 
-                const container = document.getElementById('startup-status-container');
+                // Check if status is older than 5 minutes - if so, reset to "not yet checked"
+                let isExpired = false;
+                if (!data.running && data.completed && !data.never_run) {
+                    try {
+                        // Parse the completed timestamp (format: "YYYY-MM-DD HH:MM:SS")
+                        const completedTime = new Date(data.completed.replace(' ', 'T'));
+                        const now = new Date();
+                        const ageInMinutes = (now - completedTime) / 1000 / 60;
 
-                console.log('Startup status data:', data); // Debug logging
-
-                if (data.running || data.tasks || data.completed) {
-                    let statusHTML = '<div style="margin-top: 10px; border-top: 1px solid #00AA33; padding-top: 8px;">';
-
-                    // Show last checked time
-                    if (data.started) {
-                        const statusMsg = data.running ? 'CHECKING NOW...' : 'LAST CHECKED';
-                        const statusColor = data.running ? '#00FFFF' : '#00AA33';
-                        statusHTML += `<div style="color: ${statusColor}; font-size: 0.7em; margin-bottom: 6px; opacity: 0.8;">▸ ${statusMsg}: ${data.started}</div>`;
-                    }
-
-                    // Progress Bar (if running)
-                    if (data.running) {
-                        statusHTML += `
-                        <div style="margin-bottom: 8px;">
-                            <div style="display: flex; justify-content: space-between; margin-bottom: 4px; align-items: center;">
-                                <span style="color: #00FFFF; font-size: 0.8em; font-weight: bold;">
-                                    <span class="status-dot status-warning" style="display: inline-block; margin-right: 5px; width: 8px; height: 8px; border-radius: 50%; background: #00FFFF; animation: pulse 1s infinite;"></span>
-                                    PROGRESS: ${data.current_task || 'Checking...'}
-                                </span>
-                                <span style="color: #00FF41; font-size: 0.8em; font-weight: bold;">${data.progress || 0}%</span>
-                            </div>
-                            <div style="width: 100%; height: 16px; background: rgba(0, 50, 0, 0.5); border: 2px solid #00AA33; border-radius: 3px; overflow: hidden;">
-                                <div style="height: 100%; background: linear-gradient(90deg, #00AA33 0%, #00FF41 50%, #00FFFF 100%); width: ${data.progress || 0}%; transition: width 0.5s ease; box-shadow: 0 0 10px #00FF41;"></div>
-                            </div>
-                        </div>`;
-                    }
-
-                    // Task Checklist
-                    statusHTML += '<div style="color: #00FFFF; font-size: 0.75em; margin-bottom: 5px; font-weight: bold;">SERVICES:</div>';
-                    statusHTML += '<div style="font-size: 0.75em; max-height: 200px; overflow-y: auto;">';
-
-                    if (data.tasks && Object.keys(data.tasks).length > 0) {
-                        Object.entries(data.tasks).forEach(([name, service]) => {
-                            let icon = '⏳';
-                            let color = '#888';
-
-                            if (service.status === 'success' || service.status === 'completed') {
-                                icon = '✅';
-                                color = '#00FF41';
-                            } else if (service.status === 'running' || service.status === 'checking') {
-                                icon = '🔄';
-                                color = '#00FFFF';
-                            } else if (service.status === 'warning') {
-                                icon = '⚠️';
-                                color = '#FF9900';
-                            } else if (service.status === 'error' || service.status === 'failed') {
-                                icon = '❌';
-                                color = '#FF0000';
-                            } else if (service.status === 'pending') {
-                                icon = '⏳';
-                                color = '#888';
-                            } else if (service.status === 'skipped') {
-                                icon = '⊘';
-                                color = '#666';
-                            } else if (service.status === 'info') {
-                                icon = 'ℹ️';
-                                color = '#00FFFF';
-                            } else if (service.status === 'idle') {
-                                icon = '💤';
-                                color = '#555';
-                            }
-
-                            statusHTML += `
-                            <div style="display: flex; align-items: start; padding: 4px 0; border-bottom: 1px solid rgba(0, 170, 51, 0.2);">
-                                <span style="margin-right: 6px; font-size: 1.1em;">${icon}</span>
-                                <div style="flex: 1;">
-                                    <div style="color: ${color}; font-weight: bold;">${name}</div>
-                                    <div style="color: #00AA33; font-size: 0.9em; opacity: 0.8;">${service.message || 'Waiting...'}</div>
-                                </div>
-                            </div>`;
-                        });
-                    } else {
-                        statusHTML += '<div style="color: #888; text-align: center; padding: 10px;">No services data available</div>';
-                    }
-
-                    statusHTML += '</div>';
-
-                    // Show completion summary (stays visible permanently)
-                    if (!data.running && data.completed) {
-                        const successCount = Object.values(data.tasks || {}).filter(t => t.status === 'success').length;
-                        const warningCount = Object.values(data.tasks || {}).filter(t => t.status === 'warning').length;
-                        const errorCount = Object.values(data.tasks || {}).filter(t => t.status === 'error').length;
-                        const totalCount = Object.keys(data.tasks || {}).length;
-
-                        let summaryColor = '#00FF41';
-                        let summaryIcon = '✓';
-                        if (errorCount > 0) {
-                            summaryColor = '#FF0000';
-                            summaryIcon = '✖';
-                        } else if (warningCount > 0) {
-                            summaryColor = '#FF9900';
-                            summaryIcon = '⚠';
+                        if (ageInMinutes > 5) {
+                            isExpired = true;
+                            console.log(`Startup status expired (${ageInMinutes.toFixed(1)} minutes old) - resetting to default`);
                         }
-
-                        statusHTML += `
-                        <div style="margin-top: 10px; padding: 8px; background: rgba(0, 50, 0, 0.3); border: 1px solid ${summaryColor}; border-radius: 3px;">
-                            <div style="color: ${summaryColor}; font-size: 0.8em; font-weight: bold; text-align: center; margin-bottom: 4px;">
-                                ${summaryIcon} CHECK COMPLETED
-                            </div>
-                            <div style="color: #00AA33; font-size: 0.7em; text-align: center;">
-                                ${data.completed || data.ended}
-                            </div>
-                            <div style="color: #00FF41; font-size: 0.7em; text-align: center; margin-top: 4px;">
-                                ${successCount} Success | ${warningCount} Warning | ${errorCount} Error | ${totalCount} Total
-                            </div>
-                        </div>`;
+                    } catch (e) {
+                        console.error('Error parsing timestamp:', e);
                     }
+                }
 
-                    statusHTML += '</div>';
-                    container.innerHTML = statusHTML;
+                // Treat expired status as never_run
+                const shouldShowDefault = data.never_run || isExpired;
 
-                    // Stop monitoring after completion (but NEVER clear the display)
-                    if (!data.running && data.completed) {
-                        setTimeout(() => {
-                            if (startupMonitorInterval) {
-                                clearInterval(startupMonitorInterval);
-                                startupMonitorInterval = null;
-                                console.log('Startup monitoring stopped - checklist remains visible');
-                            }
-                        }, 2000);
-                    }
+                // Update status header
+                const statusHeader = document.getElementById('startup-status-header');
+                if (shouldShowDefault) {
+                    statusHeader.textContent = '▸ STATUS: Not yet checked';
+                    statusHeader.style.color = '#00AA33';
+                } else if (data.running) {
+                    statusHeader.textContent = `▸ CHECKING NOW... Started: ${data.started}`;
+                    statusHeader.style.color = '#00FFFF';
+                } else if (data.completed) {
+                    statusHeader.textContent = `▸ LAST CHECKED: ${data.completed}`;
+                    statusHeader.style.color = '#00AA33';
+                }
+
+                // Update progress bar
+                const progressBar = document.getElementById('startup-progress-bar');
+                if (data.running) {
+                    progressBar.style.display = 'block';
+                    document.getElementById('startup-progress-task').textContent = data.current_task || 'Checking...';
+                    document.getElementById('startup-progress-percent').textContent = (data.progress || 0) + '%';
+                    document.getElementById('startup-progress-fill').style.width = (data.progress || 0) + '%';
                 } else {
-                    // Show default checklist of services that WILL be checked
-                    // This gives users a preview of what the check will do
-                    if (!container.innerHTML || container.innerHTML.includes('No status available yet') || container.innerHTML.includes('WILL BE CHECKED')) {
-                        const defaultServices = [
-                            {name: 'Dashboard Server', description: 'Web dashboard LaunchAgent'},
-                            {name: 'Unified Automation', description: 'Daily automation scheduler'},
-                            {name: 'Docker', description: 'Container runtime'},
-                            {name: 'Colima', description: 'Docker VM for macOS'},
-                            {name: 'Tailscale', description: 'VPN network'},
-                            {name: 'Pi-hole', description: 'DNS ad blocker'}
-                        ];
+                    progressBar.style.display = 'none';
+                }
 
-                        let defaultHTML = '<div style="margin-top: 10px; border-top: 1px solid #00AA33; padding-top: 8px;">';
-                        defaultHTML += '<div style="color: #00FFFF; font-size: 0.75em; margin-bottom: 5px; font-weight: bold;">SERVICES THAT WILL BE CHECKED:</div>';
-                        defaultHTML += '<div style="font-size: 0.75em;">';
+                // Update each service status
+                if (data.tasks && Object.keys(data.tasks).length > 0) {
+                    Object.entries(data.tasks).forEach(([name, service]) => {
+                        const serviceItem = document.querySelector(`.startup-service-item[data-service="${name}"]`);
+                        if (serviceItem) {
+                            const icon = serviceItem.querySelector('.service-icon');
+                            const nameEl = serviceItem.querySelector('.service-name');
+                            const messageEl = serviceItem.querySelector('.service-message');
 
-                        defaultServices.forEach(service => {
-                            defaultHTML += `
-                            <div style="display: flex; align-items: start; padding: 4px 0; border-bottom: 1px solid rgba(0, 170, 51, 0.2);">
-                                <span style="margin-right: 6px; font-size: 1.1em;">⊙</span>
-                                <div style="flex: 1;">
-                                    <div style="color: #00AA33; font-weight: bold;">${service.name}</div>
-                                    <div style="color: #006600; font-size: 0.9em; opacity: 0.8;">${service.description}</div>
-                                </div>
-                            </div>`;
-                        });
+                            // If expired, reset to default state
+                            let iconChar = '⊙';
+                            let color = '#00AA33';
+                            let msgColor = '#006600';
+                            let message = service.message || 'Waiting...';
 
-                        defaultHTML += '</div>';
-                        defaultHTML += '<div style="color: #00AA33; font-size: 0.7em; margin-top: 8px; text-align: center; padding: 6px; border: 1px dashed #00AA33; border-radius: 3px; opacity: 0.7;">Click <strong>"CHECK SERVICES"</strong> above to verify all services</div>';
-                        defaultHTML += '</div>';
+                            if (shouldShowDefault) {
+                                // Reset to default descriptions
+                                iconChar = '⊙';
+                                color = '#00AA33';
+                                msgColor = '#006600';
+                                const descriptions = {
+                                    'Dashboard Server': 'Web dashboard LaunchAgent',
+                                    'Unified Automation': 'Daily automation scheduler',
+                                    'Docker': 'Container runtime',
+                                    'Colima': 'Docker VM for macOS',
+                                    'Tailscale': 'VPN network',
+                                    'Pi-hole': 'DNS ad blocker'
+                                };
+                                message = descriptions[name] || 'Service';
+                            } else if (service.status === 'not_checked') {
+                                iconChar = '⊙';
+                                color = '#00AA33';
+                                msgColor = '#006600';
+                            } else if (service.status === 'success' || service.status === 'completed') {
+                                iconChar = '✅';
+                                color = '#00FF41';
+                                msgColor = '#00AA33';
+                            } else if (service.status === 'running' || service.status === 'checking') {
+                                iconChar = '🔄';
+                                color = '#00FFFF';
+                                msgColor = '#00AA33';
+                            } else if (service.status === 'warning') {
+                                iconChar = '⚠️';
+                                color = '#FF9900';
+                                msgColor = '#00AA33';
+                            } else if (service.status === 'error' || service.status === 'failed') {
+                                iconChar = '❌';
+                                color = '#FF0000';
+                                msgColor = '#00AA33';
+                            } else if (service.status === 'pending') {
+                                iconChar = '⏳';
+                                color = '#888';
+                                msgColor = '#00AA33';
+                            } else if (service.status === 'info') {
+                                iconChar = 'ℹ️';
+                                color = '#00FFFF';
+                                msgColor = '#00AA33';
+                            }
 
-                        container.innerHTML = defaultHTML;
+                            icon.textContent = iconChar;
+                            nameEl.style.color = color;
+                            messageEl.textContent = message;
+                            messageEl.style.color = msgColor;
+                        }
+                    });
+                }
+
+                // Update completion summary
+                const summaryDiv = document.getElementById('startup-completion-summary');
+                const helpText = document.getElementById('startup-help-text');
+
+                // Hide summary if expired or never run, show help text
+                if (shouldShowDefault) {
+                    summaryDiv.style.display = 'none';
+                    helpText.style.display = 'block';
+                } else if (!data.running && data.completed) {
+                    const successCount = Object.values(data.tasks || {}).filter(t => t.status === 'success').length;
+                    const warningCount = Object.values(data.tasks || {}).filter(t => t.status === 'warning').length;
+                    const errorCount = Object.values(data.tasks || {}).filter(t => t.status === 'error').length;
+                    const infoCount = Object.values(data.tasks || {}).filter(t => t.status === 'info').length;
+                    const totalCount = Object.keys(data.tasks || {}).length;
+
+                    let summaryColor = '#00FF41';
+                    let summaryIcon = '✓';
+                    if (errorCount > 0) {
+                        summaryColor = '#FF0000';
+                        summaryIcon = '✖';
+                    } else if (warningCount > 0) {
+                        summaryColor = '#FF9900';
+                        summaryIcon = '⚠';
                     }
+
+                    summaryDiv.style.display = 'block';
+                    summaryDiv.style.borderColor = summaryColor;
+                    document.getElementById('startup-summary-icon').textContent = summaryIcon;
+                    document.getElementById('startup-summary-icon').parentElement.style.color = summaryColor;
+                    document.getElementById('startup-summary-time').textContent = data.completed;
+                    document.getElementById('startup-summary-stats').textContent =
+                        `${successCount} Success | ${warningCount} Warning | ${errorCount} Error${infoCount > 0 ? ' | ' + infoCount + ' Info' : ''} | ${totalCount} Total`;
+
+                    helpText.style.display = 'none';
+                } else if (data.running) {
+                    summaryDiv.style.display = 'none';
+                    helpText.style.display = 'none';
+                }
+
+                // Stop monitoring after completion (checklist stays visible)
+                if (!data.running && data.completed) {
+                    setTimeout(() => {
+                        if (startupMonitorInterval) {
+                            clearInterval(startupMonitorInterval);
+                            startupMonitorInterval = null;
+                            console.log('Startup monitoring stopped - checklist remains visible permanently');
+                        }
+                    }, 2000);
                 }
 
             } catch (error) {
                 console.error('Error checking startup status:', error);
-                const container = document.getElementById('startup-status-container');
-                container.innerHTML = '<div style="color: #FF0000; font-size: 0.75em; margin-top: 8px; text-align: center;">❌ Error loading status: ' + error.message + '</div>';
+                // Don't disrupt the UI on error - just log it
             }
         }
 
