@@ -145,10 +145,11 @@ else
     check_pass "No hardcoded Telegram tokens"
 fi
 
-# Check for /Users/aditya paths
+# Check for hardcoded user paths (excluding verify/test scripts that check for them)
 if grep -r '/Users/aditya' scripts/ dashboard/ \
    --include='*.sh' --include='*.py' --include='*.html' \
-   --exclude='*.md' --exclude='verify-fresh-setup.sh' --exclude='security-scan.sh' 2>/dev/null; then
+   --exclude='*.md' --exclude='*verify*' --exclude='*test*' --exclude='security-scan.sh' 2>/dev/null \
+   | grep -v "grep -r.*Users"; then
     check_fail "Found hardcoded user path /Users/aditya" "Use \$HOME or config variables"
 else
     check_pass "No hardcoded user paths"

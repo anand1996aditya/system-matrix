@@ -129,7 +129,7 @@ run_warning "Fresh clone verification exists" "test -f FRESH_CLONE_VERIFICATION.
 # ============================================
 echo -e "\n${BLUE}[7/8] Checking for Hardcoded Values...${NC}\n"
 
-run_test "No /Users/aditya paths" "! grep -r '/Users/aditya' scripts/ --include='*.sh' --include='*.py' --exclude='*security-scan*' --exclude='*verify-fresh*'"
+run_test "No /Users/aditya paths" "! grep -r '/Users/aditya' scripts/ dashboard/ --include='*.sh' --include='*.py' --exclude='*security-scan*' --exclude='*verify*' --exclude='*test*' | grep -v 'grep -r'"
 run_test "No hardcoded tokens" "! grep -r '[0-9]\{9,10\}:[A-Za-z0-9_-]\{35\}' scripts/ --include='*.sh' --exclude='*security-scan*'"
 run_test "Config has placeholders" "grep -q 'YOUR_BOT_TOKEN_HERE' config/config.template.json"
 

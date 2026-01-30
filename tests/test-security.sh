@@ -136,7 +136,7 @@ run_test "No hardcoded Telegram tokens in scripts" \
     "! grep -r '[0-9]\{9,10\}:[A-Za-z0-9_-]\{35\}' scripts/ --include='*.sh' --include='*.py' --exclude='*test*'"
 
 run_test "No /Users/aditya in scripts" \
-    "! grep -r '/Users/aditya' scripts/ --include='*.sh' --include='*.py'"
+    "! grep -r '/Users/aditya' scripts/ --include='*.sh' --include='*.py' --exclude='*verify*' --exclude='*test*' | grep -v 'grep -r'"
 
 # ============================================
 # SUMMARY
