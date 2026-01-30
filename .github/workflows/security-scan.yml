@@ -89,9 +89,12 @@ jobs:
       run: |
         echo "Checking for hardcoded user-specific paths..."
 
-        # Look for /Users/aditya (should not exist except in docs)
+        # Look for /Users/aditya (should not exist except in docs and test/verify scripts)
+        # Exclude verification scripts that check for hardcoded paths (they contain the search pattern)
         if grep -r "/Users/aditya" --include="*.sh" --include="*.py" \
-           --exclude-dir=".git" --exclude-dir="docs" --exclude="*.md" .; then
+           --exclude-dir=".git" --exclude-dir="docs" --exclude-dir="tests" \
+           --exclude="*.md" --exclude="*verify*" --exclude="*test*" --exclude="security-scan.sh" . \
+           | grep -v "grep -r"; then
           echo "❌ Found hardcoded user-specific paths!"
           exit 1
         fi

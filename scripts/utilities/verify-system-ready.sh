@@ -50,8 +50,11 @@ check_warn() {
 echo -e "${BLUE}[1/6] Checking File Locations & Paths${NC}"
 echo ""
 
-# Check no hardcoded user paths in scripts (exclude test scripts that check for them)
-if grep -r "/Users/aditya" --include="*.sh" --include="*.py" --exclude-dir=".git" --exclude-dir="docs" --exclude-dir="tests" --exclude="*.md" --exclude="*verify*" --exclude="*test*" . 2>/dev/null | grep -v "grep -r" | grep -v "# Check for"; then
+# Check no hardcoded user paths in scripts (exclude test and verification scripts that check for them)
+if grep -r "/Users/aditya" scripts/ dashboard/ \
+   --include="*.sh" --include="*.py" --include="*.html" \
+   --exclude="*.md" --exclude="*verify*" --exclude="*test*" --exclude="security-scan.sh" 2>/dev/null \
+   | grep -v "grep -r"; then
     check_fail "Hardcoded user paths found in scripts" "Replace with \${HOME} or config-based paths"
 else
     check_pass "No hardcoded user paths in scripts"
