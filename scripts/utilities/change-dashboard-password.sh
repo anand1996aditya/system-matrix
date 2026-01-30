@@ -2,7 +2,8 @@
 
 # Script to change System Matrix Dashboard password
 
-AUTH_FILE="$HOME/Claude-Code/Scripts/.dashboard_auth"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CONFIG_FILE="$SCRIPT_DIR/../../config/config.json"
 
 echo "╔═══════════════════════════════════════════════════════════╗"
 echo "║                                                           ║"
@@ -11,15 +12,15 @@ echo "║                                                           ║"
 echo "╚═══════════════════════════════════════════════════════════╝"
 echo ""
 
-# Check if auth file exists
-if [ ! -f "$AUTH_FILE" ]; then
-    echo "⚠️  Authentication config file not found: $AUTH_FILE"
-    echo "The dashboard will create default credentials on first start."
+# Check if config file exists
+if [ ! -f "$CONFIG_FILE" ]; then
+    echo "⚠️  Configuration file not found: $CONFIG_FILE"
+    echo "Please run setup.sh first."
     exit 1
 fi
 
 # Read current username
-CURRENT_USER=$(cat "$AUTH_FILE" | python3 -c "import sys, json; print(json.load(sys.stdin).get('username', 'admin'))")
+CURRENT_USER=$(cat "$CONFIG_FILE" | python3 -c "import sys, json; print(json.load(sys.stdin).get('dashboard_auth', {}).get('username', 'admin'))")
 
 echo "Current username: $CURRENT_USER"
 echo ""
@@ -56,16 +57,19 @@ fi
 # Generate password hash using Python
 PASSWORD_HASH=$(echo -n "$NEW_PASSWORD" | python3 -c "import sys, hashlib; print(hashlib.sha256(sys.stdin.read().encode()).hexdigest())")
 
-# Create new auth config
-cat > "$AUTH_FILE" << EOF
-{
-  "username": "$NEW_USER",
-  "password_hash": "$PASSWORD_HASH"
-}
+# Update config.json with new credentials using Python
+python3 << EOF
+import json
+with open('$CONFIG_FILE', 'r') as f:
+    config = json.load(f)
+config['dashboard_auth']['username'] = '$NEW_USER'
+config['dashboard_auth']['password_hash'] = '$PASSWORD_HASH'
+with open('$CONFIG_FILE', 'w') as f:
+    json.dump(config, f, indent=2)
 EOF
 
 # Secure the file
-chmod 600 "$AUTH_FILE"
+chmod 600 "$CONFIG_FILE"
 
 echo "✅ Dashboard credentials updated successfully!"
 echo ""
@@ -74,6 +78,5 @@ echo "  Username: $NEW_USER"
 echo "  Password: (hidden)"
 echo ""
 echo "🔄 Restart the dashboard server for changes to take effect:"
-echo "   pkill -f dashboard-server.py"
-echo "   cd ~/Claude-Code/Scripts && python3 dashboard-server.py &"
+echo "   launchctl kickstart -k gui/\$(id -u)/com.securitylab.dashboard"
 echo ""
