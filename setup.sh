@@ -60,6 +60,45 @@ fi
 
 echo -e "${GREEN}✓ All required dependencies found${NC}\n"
 
+# Check for port conflicts
+echo -e "${BLUE}→ Checking for port conflicts...${NC}"
+
+check_port() {
+    local port=$1
+    local service=$2
+    if lsof -Pi :$port -sTCP:LISTEN -t >/dev/null 2>&1; then
+        echo -e "${YELLOW}  ⚠️  Port $port is already in use (needed for $service)${NC}"
+        return 1
+    else
+        echo -e "${GREEN}  ✓ Port $port available${NC}"
+        return 0
+    fi
+}
+
+PORT_CONFLICTS=()
+
+check_port 8888 "Dashboard" || PORT_CONFLICTS+=("8888 (Dashboard)")
+check_port 8080 "Pi-hole Web UI" || PORT_CONFLICTS+=("8080 (Pi-hole)")
+check_port 32400 "Plex Media Server" || PORT_CONFLICTS+=("32400 (Plex)")
+check_port 5353 "Pi-hole DNS" || PORT_CONFLICTS+=("5353 (DNS)")
+
+if [ ${#PORT_CONFLICTS[@]} -gt 0 ]; then
+    echo -e "${YELLOW}"
+    echo "⚠️  Warning: Some ports are in use:"
+    for conflict in "${PORT_CONFLICTS[@]}"; do
+        echo "   - $conflict"
+    done
+    echo -e "${NC}"
+    read -p "Continue anyway? (y/N): " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        echo "Setup cancelled. Free the ports and try again."
+        exit 1
+    fi
+fi
+
+echo -e "${GREEN}✓ Port check complete${NC}\n"
+
 # Create directories
 echo -e "${BLUE}→ Creating directory structure...${NC}"
 
@@ -182,6 +221,59 @@ echo ""
 echo -e "${BLUE}→ Creating configuration file...${NC}"
 cp "$CONFIG_TEMPLATE" "$CONFIG_FILE"
 
+# Validation functions
+validate_telegram_token() {
+    local token="$1"
+    # Telegram bot tokens format: 123456789:ABCdefGHIjklMNOpqrSTUvwxYZ
+    if [[ "$token" =~ ^[0-9]{8,10}:[A-Za-z0-9_-]{35}$ ]]; then
+        return 0
+    else
+        echo -e "${RED}Invalid Telegram token format${NC}"
+        echo "Expected format: 1234567890:ABCdefGHIjklMNOpqrSTUvwxYZ"
+        return 1
+    fi
+}
+
+validate_telegram_chat_id() {
+    local chat_id="$1"
+    # Chat ID should be numeric (can be negative for groups)
+    if [[ "$chat_id" =~ ^-?[0-9]+$ ]]; then
+        return 0
+    else
+        echo -e "${RED}Invalid chat ID format${NC}"
+        echo "Chat ID should be a number (e.g., 123456789 or -987654321)"
+        return 1
+    fi
+}
+
+validate_port() {
+    local port="$1"
+    if [[ "$port" =~ ^[0-9]+$ ]] && [ "$port" -ge 1024 ] && [ "$port" -le 65535 ]; then
+        return 0
+    else
+        echo -e "${RED}Invalid port number${NC}"
+        echo "Port must be between 1024 and 65535"
+        return 1
+    fi
+}
+
+validate_path() {
+    local path="$1"
+    local allow_missing="${2:-false}"
+
+    # Expand ~ to home directory
+    path="${path/#\~/$HOME}"
+
+    if [ -e "$path" ]; then
+        return 0
+    elif [ "$allow_missing" = "true" ]; then
+        return 0
+    else
+        echo -e "${YELLOW}Warning: Path does not exist: $path${NC}"
+        return 1
+    fi
+}
+
 # Function to update JSON value
 update_json() {
     local file="$1"
@@ -230,16 +322,28 @@ if [[ $REPLY =~ ^[Yy]$ ]]; then
     echo "  2. Send /newbot and follow instructions"
     echo "  3. Copy the bot token\n"
 
-    read -p "Enter Telegram Bot Token: " TELEGRAM_TOKEN
-    update_json "$CONFIG_FILE" "notifications.telegram.bot_token" "$TELEGRAM_TOKEN"
+    while true; do
+        read -p "Enter Telegram Bot Token: " TELEGRAM_TOKEN
+        if validate_telegram_token "$TELEGRAM_TOKEN"; then
+            update_json "$CONFIG_FILE" "notifications.telegram.bot_token" "$TELEGRAM_TOKEN"
+            break
+        fi
+        echo "Please try again."
+    done
 
     echo -e "\n${BLUE}To get your Chat ID:${NC}"
     echo "  1. Search for @userinfobot in Telegram"
     echo "  2. Send /start"
     echo "  3. Copy your ID\n"
 
-    read -p "Enter Telegram Chat ID: " TELEGRAM_CHAT_ID
-    update_json "$CONFIG_FILE" "notifications.telegram.chat_id" "$TELEGRAM_CHAT_ID"
+    while true; do
+        read -p "Enter Telegram Chat ID: " TELEGRAM_CHAT_ID
+        if validate_telegram_chat_id "$TELEGRAM_CHAT_ID"; then
+            update_json "$CONFIG_FILE" "notifications.telegram.chat_id" "$TELEGRAM_CHAT_ID"
+            break
+        fi
+        echo "Please try again."
+    done
 else
     update_json "$CONFIG_FILE" "notifications.telegram.enabled" "False" "boolean"
 fi
@@ -250,13 +354,31 @@ read -p "Enter dashboard username (default: admin): " DASHBOARD_USER
 DASHBOARD_USER=${DASHBOARD_USER:-admin}
 update_json "$CONFIG_FILE" "dashboard_auth.username" "$DASHBOARD_USER"
 
-echo -n "Enter dashboard password: "
-read -s DASHBOARD_PASS
-echo
-if [ -z "$DASHBOARD_PASS" ]; then
-    DASHBOARD_PASS="matrix2026"
-    echo -e "${YELLOW}Using default password: matrix2026 (PLEASE CHANGE THIS!)${NC}"
-fi
+while true; do
+    echo -n "Enter dashboard password (min 8 characters): "
+    read -s DASHBOARD_PASS
+    echo
+
+    if [ -z "$DASHBOARD_PASS" ]; then
+        DASHBOARD_PASS="matrix2026"
+        echo -e "${YELLOW}Using default password: matrix2026 (PLEASE CHANGE THIS!)${NC}"
+        break
+    elif [ ${#DASHBOARD_PASS} -lt 8 ]; then
+        echo -e "${RED}Password too short. Must be at least 8 characters.${NC}"
+        continue
+    else
+        # Confirm password
+        echo -n "Confirm dashboard password: "
+        read -s DASHBOARD_PASS_CONFIRM
+        echo
+
+        if [ "$DASHBOARD_PASS" != "$DASHBOARD_PASS_CONFIRM" ]; then
+            echo -e "${RED}Passwords do not match. Please try again.${NC}"
+            continue
+        fi
+        break
+    fi
+done
 
 # Hash the password
 PASSWORD_HASH=$(echo -n "$DASHBOARD_PASS" | shasum -a 256 | awk '{print $1}')
@@ -266,30 +388,93 @@ update_json "$CONFIG_FILE" "dashboard_auth.password_hash" "$PASSWORD_HASH"
 echo -e "\n${YELLOW}═══ Backup Configuration ═══${NC}"
 echo "Enter paths to your backup scripts (or press Enter to skip):"
 
-read -p "Google Drive backup script path [$HOME/backup_documents_to_gdrive.sh]: " GD_SCRIPT
-GD_SCRIPT=${GD_SCRIPT:-$HOME/backup_documents_to_gdrive.sh}
-update_json "$CONFIG_FILE" "backup.scripts.google_drive" "$GD_SCRIPT"
+while true; do
+    read -p "Google Drive backup script path [$HOME/backup_documents_to_gdrive.sh]: " GD_SCRIPT
+    GD_SCRIPT=${GD_SCRIPT:-$HOME/backup_documents_to_gdrive.sh}
 
-read -p "EVM backup script path [$HOME/backup_documents_to_evm.sh]: " EVM_SCRIPT
-EVM_SCRIPT=${EVM_SCRIPT:-$HOME/backup_documents_to_evm.sh}
-update_json "$CONFIG_FILE" "backup.scripts.evm_drive" "$EVM_SCRIPT"
+    # Expand ~ to home directory
+    GD_SCRIPT="${GD_SCRIPT/#\~/$HOME}"
+
+    if [ -z "$GD_SCRIPT" ] || validate_path "$GD_SCRIPT" true; then
+        update_json "$CONFIG_FILE" "backup.scripts.google_drive" "$GD_SCRIPT"
+        break
+    fi
+
+    read -p "Path not found. Continue anyway? (y/N): " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        update_json "$CONFIG_FILE" "backup.scripts.google_drive" "$GD_SCRIPT"
+        break
+    fi
+done
+
+while true; do
+    read -p "EVM backup script path [$HOME/backup_documents_to_evm.sh]: " EVM_SCRIPT
+    EVM_SCRIPT=${EVM_SCRIPT:-$HOME/backup_documents_to_evm.sh}
+
+    # Expand ~ to home directory
+    EVM_SCRIPT="${EVM_SCRIPT/#\~/$HOME}"
+
+    if [ -z "$EVM_SCRIPT" ] || validate_path "$EVM_SCRIPT" true; then
+        update_json "$CONFIG_FILE" "backup.scripts.evm_drive" "$EVM_SCRIPT"
+        break
+    fi
+
+    read -p "Path not found. Continue anyway? (y/N): " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        update_json "$CONFIG_FILE" "backup.scripts.evm_drive" "$EVM_SCRIPT"
+        break
+    fi
+done
 
 # Dashboard port
 echo -e "\n${YELLOW}═══ Dashboard Settings ═══${NC}"
-read -p "Dashboard port (default: 8888): " DASHBOARD_PORT
-DASHBOARD_PORT=${DASHBOARD_PORT:-8888}
-update_json "$CONFIG_FILE" "services.dashboard.port" "$DASHBOARD_PORT" "number"
+while true; do
+    read -p "Dashboard port (default: 8888): " DASHBOARD_PORT
+    DASHBOARD_PORT=${DASHBOARD_PORT:-8888}
+
+    if validate_port "$DASHBOARD_PORT"; then
+        # Check if port is available
+        if lsof -Pi :$DASHBOARD_PORT -sTCP:LISTEN -t >/dev/null 2>&1; then
+            echo -e "${YELLOW}Warning: Port $DASHBOARD_PORT is currently in use${NC}"
+            read -p "Use it anyway? (y/N): " -n 1 -r
+            echo
+            if [[ $REPLY =~ ^[Yy]$ ]]; then
+                update_json "$CONFIG_FILE" "services.dashboard.port" "$DASHBOARD_PORT" "number"
+                break
+            fi
+        else
+            update_json "$CONFIG_FILE" "services.dashboard.port" "$DASHBOARD_PORT" "number"
+            break
+        fi
+    fi
+done
 
 # Expand environment variables in paths
 echo -e "\n${BLUE}→ Expanding environment variables in config...${NC}"
 sed -i.bak "s|\${HOME}|$HOME|g" "$CONFIG_FILE"
 sed -i.bak "s|\${USER}|$USER|g" "$CONFIG_FILE"
+
+# Replace template install path with actual detected path
+DETECTED_INSTALL_PATH="$SCRIPT_DIR"
+sed -i.bak "s|\${HOME}/Claude-Code/System-Matrix|$DETECTED_INSTALL_PATH|g" "$CONFIG_FILE"
+
 rm -f "$CONFIG_FILE.bak"
 
 echo -e "${GREEN}✓ Configuration file created: $CONFIG_FILE${NC}\n"
 
 # Create LaunchAgents
 echo -e "${BLUE}→ Creating LaunchAgent files...${NC}"
+
+# Detect Python path (for M1 Mac compatibility)
+PYTHON_PATH=$(command -v python3)
+if [ -z "$PYTHON_PATH" ]; then
+    PYTHON_PATH="/usr/bin/python3"
+    echo -e "${YELLOW}  ⚠️  Python3 not found in PATH, using default /usr/bin/python3${NC}"
+else
+    echo -e "${GREEN}  ✓ Using Python at: $PYTHON_PATH${NC}"
+fi
 
 # Unified automation LaunchAgent
 cat > "$CONFIG_DIR/launchagents/com.securitylab.unified.plist" << EOF
@@ -341,7 +526,7 @@ cat > "$CONFIG_DIR/launchagents/com.securitylab.dashboard.plist" << EOF
 
     <key>ProgramArguments</key>
     <array>
-        <string>/usr/bin/python3</string>
+        <string>$PYTHON_PATH</string>
         <string>$SCRIPT_DIR/scripts/monitoring/dashboard-server.py</string>
     </array>
 

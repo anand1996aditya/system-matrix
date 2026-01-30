@@ -3,6 +3,7 @@
   "_instructions": "Copy this file to 'config.json' and fill in your values. The config.json file is git-ignored for security.",
 
   "system": {
+    "_comment_install_path": "Auto-detected during setup - this placeholder will be replaced with actual install directory",
     "name": "System Matrix Dashboard",
     "version": "1.0.0",
     "install_path": "${HOME}/Claude-Code/System-Matrix",
@@ -10,6 +11,7 @@
   },
 
   "paths": {
+    "_comment_paths": "These paths are auto-detected during setup.sh and replaced with actual installation directory",
     "base_dir": "${HOME}/Claude-Code/System-Matrix",
     "dashboard_dir": "${HOME}/Claude-Code/System-Matrix/dashboard",
     "scripts_dir": "${HOME}/Claude-Code/System-Matrix/scripts",
