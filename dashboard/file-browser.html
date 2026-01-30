@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>📂 File Browser - System Matrix</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Courier New', monospace;
+            background: #0A0A0A;
+            color: #00FF41;
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .header {
+            text-align: center;
+            padding: 20px;
+            border: 2px solid #00FF41;
+            border-radius: 5px;
+            margin-bottom: 30px;
+            background: rgba(0, 50, 0, 0.3);
+            box-shadow: 0 0 20px rgba(0, 255, 65, 0.2);
+        }
+
+        .header h1 {
+            font-size: 2em;
+            color: #00FFFF;
+            text-shadow: 0 0 10px #00FFFF;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            color: #00AA33;
+            font-size: 0.9em;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .card {
+            background: rgba(0, 30, 0, 0.6);
+            border: 2px solid #00AA33;
+            border-radius: 5px;
+            padding: 20px;
+            box-shadow: 0 0 15px rgba(0, 255, 65, 0.1);
+        }
+
+        .card-title {
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #00FFFF;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #00AA33;
+            text-shadow: 0 0 5px #00FFFF;
+        }
+
+        .service-item {
+            padding: 12px;
+            border: 1px solid #00AA33;
+            border-radius: 4px;
+            margin-bottom: 10px;
+            background: rgba(0, 50, 0, 0.3);
+            transition: all 0.3s;
+        }
+
+        .service-item:hover {
+            background: rgba(0, 80, 0, 0.4);
+            border-color: #00FF41;
+            box-shadow: 0 0 10px rgba(0, 255, 65, 0.2);
+        }
+
+        .service-name {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: bold;
+            color: #00FF41;
+            margin-bottom: 8px;
+            font-size: 1.1em;
+        }
+
+        .service-details {
+            color: #00AA33;
+            font-size: 0.85em;
+            margin-bottom: 8px;
+        }
+
+        .service-btn {
+            background: rgba(0, 100, 200, 0.4);
+            color: #00FFFF;
+            border: 1px solid #00FFFF;
+            padding: 8px 16px;
+            font-family: 'Courier New', monospace;
+            font-weight: bold;
+            font-size: 0.85em;
+            cursor: pointer;
+            border-radius: 3px;
+            transition: all 0.3s;
+            width: 100%;
+        }
+
+        .service-btn:hover:not(:disabled) {
+            background: rgba(0, 150, 255, 0.6);
+            box-shadow: 0 0 10px rgba(0, 255, 255, 0.4);
+        }
+
+        .service-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        .status-running { background: #00FF41; box-shadow: 0 0 8px #00FF41; }
+        .status-stopped { background: #0099FF; box-shadow: 0 0 8px #0099FF; }
+        .status-warning { background: #FF9900; box-shadow: 0 0 8px #FF9900; }
+
+        .metric {
+            padding: 8px;
+            border-bottom: 1px solid #003300;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .metric:hover {
+            background: rgba(0, 80, 0, 0.3);
+        }
+
+        .back-link {
+            display: inline-block;
+            margin-bottom: 20px;
+            color: #00FFFF;
+            text-decoration: none;
+            padding: 10px 20px;
+            border: 1px solid #00FFFF;
+            border-radius: 3px;
+            transition: all 0.3s;
+        }
+
+        .back-link:hover {
+            background: rgba(0, 255, 255, 0.2);
+            box-shadow: 0 0 10px rgba(0, 255, 255, 0.3);
+        }
+
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📂 FILE BROWSER</h1>
+            <p>SYSTEM METRICS | EXTERNAL DRIVES MANAGER</p>
+        </div>
+
+        <a href="/" class="back-link">⬅ BACK TO DASHBOARD</a>
+
+        <div class="card">
+            <div class="card-title">📁 EXTERNAL DRIVES</div>
+            <div id="file-browser-content">
+                <div style="text-align:center;padding:30px;color:#00FF41">Loading...</div>
+            </div>
+        </div>
+    </div>
+
+    <script src="file-browser.js"></script>
+    <script>
+        // Initialize File Browser on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            FileBrowser.init();
+        });
+    </script>
+</body>
+</html>

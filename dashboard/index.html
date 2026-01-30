@@ -1,0 +1,2227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SYSTEM MATRIX :: Aditya's M1 Server</title>
+    <!-- Chart.js for graphs -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Courier New', monospace;
+            background: #0A0A0A;  /* Slightly lighter black for better contrast */
+            color: #00FF41;
+            padding: 10px;
+            min-height: 100vh;
+            position: relative;
+            overflow-x: hidden;
+            font-size: 14px;  /* Increased from 12px for better readability */
+        }
+
+        /* Matrix rain background */
+        #matrix-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            opacity: 0.03;
+        }
+
+        .container {
+            max-width: 100%;
+            margin: 0 auto;
+            position: relative;
+            z-index: 1;
+        }
+
+        header {
+            background: rgba(0, 30, 0, 0.95);
+            padding: 15px;
+            border: 3px solid #00FF41;  /* Thicker border */
+            border-radius: 5px;
+            box-shadow: 0 0 15px rgba(0, 255, 65, 0.3);
+            margin-bottom: 10px;
+            text-align: center;
+        }
+
+        h1 {
+            color: #00FFFF;  /* Cyan for main title */
+            font-size: 1.4em;
+            margin-bottom: 5px;
+            text-shadow: 0 0 10px #00FFFF;
+            letter-spacing: 3px;
+            animation: glow 2s ease-in-out infinite alternate;
+            font-weight: 900;
+        }
+
+        @keyframes glow {
+            from {
+                text-shadow: 0 0 8px #00FFFF;
+            }
+            to {
+                text-shadow: 0 0 15px #00FFFF, 0 0 20px #00FF41;
+            }
+        }
+
+        .subtitle {
+            color: #00AA33;
+            font-size: 0.85em;
+            letter-spacing: 1px;
+        }
+
+        .last-update {
+            margin-top: 5px;
+            color: #00AA33;
+            font-size: 0.75em;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .card {
+            background: rgba(0, 30, 0, 0.9);  /* Slightly more opaque for better contrast */
+            padding: 12px;
+            border: 2px solid #00FF41;  /* Thicker border for better visibility */
+            border-radius: 3px;
+            box-shadow: 0 0 10px rgba(0, 255, 65, 0.2);
+            transition: all 0.2s ease;
+        }
+
+        .card:hover {
+            box-shadow: 0 0 20px rgba(0, 255, 65, 0.4);
+            border-color: #00FF41;
+            border-width: 3px;
+        }
+
+        .card-title {
+            font-size: 1em;  /* Slightly larger */
+            color: #00FF41;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            text-shadow: 0 0 5px #00FF41;
+            letter-spacing: 1px;
+            border-bottom: 2px solid #00FF41;  /* Thicker, brighter border */
+            padding-bottom: 6px;
+            font-weight: 900;  /* Bolder */
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+            animation: pulse 2s infinite;
+            box-shadow: 0 0 8px currentColor;
+        }
+
+        /* Color blind accessible status dots */
+        .status-running {
+            background: #00FF41;
+            box-shadow: 0 0 8px #00FF41;
+        }
+
+        .status-stopped {
+            background: #0099FF;  /* Changed from red to bright blue */
+            box-shadow: 0 0 8px #0099FF;
+            animation: pulse-blue 1s infinite;
+        }
+
+        .status-warning {
+            background: #FF9900;  /* Changed from yellow to orange */
+            box-shadow: 0 0 8px #FF9900;
+            animation: pulse-orange 1s infinite;
+        }
+
+        @keyframes pulse-blue {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        @keyframes pulse-orange {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+
+        /* Status text colors - color blind accessible with icons */
+        .metric-value.status-running {
+            color: #00FF41;
+            text-shadow: 0 0 5px #00FF41;
+            font-weight: 700;
+        }
+
+        .metric-value.status-running::before {
+            content: '✓ ';
+            font-weight: 900;
+        }
+
+        .metric-value.status-stopped {
+            color: #0099FF;  /* Bright blue instead of red */
+            text-shadow: 0 0 5px #0099FF;
+            font-weight: 700;
+        }
+
+        .metric-value.status-stopped::before {
+            content: '✗ ';
+            font-weight: 900;
+        }
+
+        .metric-value.status-warning {
+            color: #FF9900;  /* Orange instead of yellow */
+            text-shadow: 0 0 5px #FF9900;
+            font-weight: 700;
+        }
+
+        .metric-value.status-warning::before {
+            content: '⚠ ';
+            font-weight: 900;
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.5;
+            }
+        }
+
+        .service-item {
+            padding: 8px;
+            margin-bottom: 6px;
+            background: rgba(0, 50, 0, 0.4);  /* More opaque */
+            border-radius: 2px;
+            border-left: 3px solid #00FF41;  /* Thicker border */
+            font-size: 0.85em;
+            border: 1px solid #00AA33;  /* Added full border for definition */
+        }
+
+        .service-item:hover {
+            background: rgba(0, 80, 0, 0.5);
+            border-color: #00FF41;
+            border-width: 2px;
+        }
+
+        .service-name {
+            font-weight: 600;
+            margin-bottom: 4px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: #00FF41;
+        }
+
+        .service-details {
+            color: #00AA33;
+            font-size: 0.9em;
+            line-height: 1.4;
+        }
+
+        .service-actions {
+            display: flex;
+            gap: 4px;
+            margin-top: 4px;
+        }
+
+        .service-btn {
+            background: rgba(0, 100, 0, 0.5);  /* More opaque */
+            border: 2px solid #00AA33;  /* Thicker border */
+            color: #00FF41;
+            padding: 3px 8px;  /* More padding */
+            font-size: 0.65em;
+            cursor: pointer;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+            font-weight: 700;  /* Bolder text */
+            transition: all 0.2s;
+            text-shadow: 0 0 3px #00FF41;
+            flex: 1;
+            position: relative;
+        }
+
+        .service-btn:hover {
+            background: rgba(0, 150, 0, 0.7);
+            border-color: #00FF41;
+            border-width: 3px;
+            box-shadow: 0 0 10px #00FF41;
+            transform: translateY(-1px);
+        }
+
+        .service-btn:active {
+            background: rgba(0, 200, 0, 0.8);
+            transform: scale(0.98);
+        }
+
+        .service-btn.restart-btn:hover {
+            background: rgba(150, 100, 0, 0.6);  /* Changed to orange tone */
+            border-color: #FF9900;
+            color: #FF9900;
+            text-shadow: 0 0 3px #FF9900;
+        }
+
+        .service-btn:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+            border-style: dashed;  /* Visual indicator it's disabled */
+        }
+
+        .metric {
+            display: flex;
+            justify-content: space-between;
+            padding: 6px 0;
+            border-bottom: 1px solid #003300;
+            font-size: 0.85em;
+        }
+
+        .metric:last-child {
+            border-bottom: none;
+        }
+
+        .metric-label {
+            color: #00CC44;  /* Brighter green */
+            font-weight: 600;
+            text-shadow: 0 0 2px #00AA33;
+        }
+
+        .metric-value {
+            font-weight: 700;  /* Bolder */
+            color: #00FFFF;  /* Cyan for better distinction */
+            text-shadow: 0 0 5px #00FFFF;
+            font-size: 1.05em;  /* Slightly larger */
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 20px;  /* Slightly taller */
+            background: rgba(0, 50, 0, 0.5);
+            border: 2px solid #00AA33;  /* Thicker border */
+            border-radius: 3px;
+            overflow: hidden;
+            margin-top: 4px;
+            position: relative;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #00AA33 0%, #00FF41 50%, #00FFFF 100%);  /* Added cyan gradient for better distinction */
+            transition: width 0.5s ease;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            padding-right: 5px;
+            box-shadow: 0 0 10px #00FF41;
+            position: relative;
+            border-right: 2px solid #00FF41;  /* Added right border for clear edge */
+        }
+
+        .progress-fill::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(
+                90deg,
+                transparent,
+                rgba(255, 255, 255, 0.2),
+                transparent
+            );
+            animation: shimmer 2s infinite;
+        }
+
+        @keyframes shimmer {
+            0% {
+                transform: translateX(-100%);
+            }
+            100% {
+                transform: translateX(100%);
+            }
+        }
+
+        .progress-text {
+            color: #000000;
+            font-weight: 700;
+            font-size: 0.75em;
+            text-shadow: none;
+            z-index: 1;
+            position: relative;
+        }
+
+        .alert {
+            padding: 8px 12px;
+            border-radius: 2px;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            border: 1px solid;
+            font-size: 0.85em;
+        }
+
+        .alert-info {
+            background: rgba(0, 100, 200, 0.3);
+            border-color: #0099FF;
+            border-width: 2px;
+            color: #00DDFF;
+        }
+
+        .alert-info::before {
+            content: 'ℹ️ ';
+            font-weight: 900;
+        }
+
+        .alert-warning {
+            background: rgba(200, 120, 0, 0.3);
+            border-color: #FF9900;
+            border-width: 2px;
+            color: #FFBB00;
+        }
+
+        .alert-warning::before {
+            content: '⚠️ ';
+            font-weight: 900;
+        }
+
+        .alert-error {
+            background: rgba(0, 100, 200, 0.3);  /* Changed to blue background */
+            border-color: #0099FF;
+            border-width: 3px;  /* Thicker border for errors */
+            color: #0099FF;
+            border-style: double;  /* Double border to distinguish from warnings */
+        }
+
+        .alert-error::before {
+            content: '✗ ';
+            font-weight: 900;
+        }
+
+        .alert-icon {
+            font-size: 1.2em;
+        }
+
+        .alert-message {
+            flex: 1;
+        }
+
+        .pihole-stats {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .pihole-stat {
+            text-align: center;
+            padding: 10px;
+            background: rgba(0, 50, 0, 0.4);
+            border: 1px solid #00AA33;
+            border-radius: 2px;
+            transition: all 0.2s ease;
+        }
+
+        .pihole-stat:hover {
+            border-color: #00FF41;
+            box-shadow: 0 0 10px rgba(0, 255, 65, 0.2);
+        }
+
+        .pihole-stat-value {
+            font-size: 1.3em;
+            font-weight: 700;
+            margin-bottom: 3px;
+            color: #00FF41;
+            text-shadow: 0 0 5px #00FF41;
+        }
+
+        .pihole-stat-label {
+            font-size: 0.75em;
+            color: #00AA33;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #00FF41;
+            font-size: 1em;
+            text-shadow: 0 0 8px #00FF41;
+        }
+
+        .error {
+            background: rgba(100, 0, 0, 0.3);
+            border: 2px solid #FF0000;
+            padding: 15px;
+            border-radius: 3px;
+            color: #FF0000;
+            margin-top: 10px;
+        }
+
+        /* Scanline effect */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: repeating-linear-gradient(
+                0deg,
+                rgba(0, 255, 65, 0.03) 0px,
+                transparent 1px,
+                transparent 2px,
+                rgba(0, 255, 65, 0.03) 3px
+            );
+            pointer-events: none;
+            z-index: 999;
+        }
+
+        /* Screen flicker */
+        @keyframes flicker {
+            0%, 100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.98;
+            }
+        }
+
+        .container {
+            animation: flicker 0.15s infinite;
+        }
+
+        /* Terminal cursor */
+        .cursor {
+            display: inline-block;
+            width: 8px;
+            height: 16px;
+            background: #00FF41;
+            animation: blink 1s infinite;
+            margin-left: 3px;
+        }
+
+        @keyframes blink {
+            0%, 50% {
+                opacity: 1;
+            }
+            51%, 100% {
+                opacity: 0;
+            }
+        }
+
+        /* Matrix code scroll on header */
+        .matrix-text {
+            position: absolute;
+            top: 3px;
+            left: 3px;
+            font-size: 7px;  /* Increased from 6px for better readability */
+            color: #00AA33;
+            opacity: 0.3;
+            line-height: 1;
+        }
+
+        /* Wide layout */
+        .wide-card {
+            grid-column: span 2;
+        }
+
+        /* Alert Banner Styles */
+        .alert-banner {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            max-width: 400px;
+            background: rgba(0, 30, 0, 0.95);
+            border: 2px solid #00FF41;
+            border-radius: 5px;
+            padding: 15px;
+            box-shadow: 0 0 20px rgba(0, 255, 65, 0.4);
+            z-index: 10000;
+            animation: slideIn 0.3s ease;
+        }
+
+        .alert-banner.critical {
+            border-color: #FF0000;
+            box-shadow: 0 0 20px rgba(255, 0, 0, 0.4);
+        }
+
+        .alert-banner.warning {
+            border-color: #FF9900;
+            box-shadow: 0 0 20px rgba(255, 153, 0, 0.4);
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(450px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        /* Mini Sparkline Chart Container */
+        .sparkline-container {
+            height: 40px;
+            margin-top: 8px;
+        }
+
+        /* Expandable Section */
+        .expandable {
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .expandable::before {
+            content: '▼ ';
+            display: inline-block;
+            transition: transform 0.2s;
+        }
+
+        .expandable.collapsed::before {
+            transform: rotate(-90deg);
+        }
+
+        .expandable-content {
+            max-height: 1000px;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+        }
+
+        .expandable-content.collapsed {
+            max-height: 0;
+        }
+
+        /* Gauge Meter */
+        .gauge-container {
+            position: relative;
+            width: 100px;
+            height: 50px;
+            margin: 10px auto;
+        }
+
+        .gauge-meter {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Extra Large Desktop (1920px+) - 4 columns */
+        @media (min-width: 1920px) {
+            .container {
+                max-width: 1800px;
+            }
+
+            body {
+                font-size: 15px;  /* Increased from 13px for better readability */
+            }
+        }
+
+        /* Large Desktop (1400-1920px) - 4 columns */
+        @media (min-width: 1400px) and (max-width: 1919px) {
+            body {
+                font-size: 14px;  /* Increased from 12px for better readability */
+            }
+        }
+
+        /* Medium Desktop/Laptop (1024-1399px) - 3 columns */
+        @media (max-width: 1399px) {
+            .grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+
+            .wide-card {
+                grid-column: span 1;
+            }
+
+            body {
+                font-size: 13px;  /* Increased from 11px for better readability */
+            }
+        }
+
+        /* Tablet Landscape (768-1023px) - 2 columns */
+        @media (max-width: 1023px) {
+            .grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .wide-card {
+                grid-column: span 2;
+            }
+
+            body {
+                padding: 8px;
+                font-size: 13px;  /* Increased from 11px for better readability */
+            }
+
+            header {
+                padding: 10px;
+            }
+
+            h1 {
+                font-size: 1.2em;
+                letter-spacing: 1px;
+            }
+
+            .subtitle {
+                font-size: 0.8em;
+            }
+
+            .card {
+                padding: 10px;
+            }
+
+            .card-title {
+                font-size: 0.9em;
+            }
+        }
+
+        /* Tablet Portrait (600-767px) - 2 columns stacked */
+        @media (max-width: 767px) {
+            body {
+                padding: 8px;
+                font-size: 12px;  /* Increased from 10px for better readability */
+            }
+
+            header {
+                padding: 8px 10px;
+            }
+
+            h1 {
+                font-size: 1.1em;
+                margin-bottom: 3px;
+            }
+
+            .subtitle {
+                font-size: 0.75em;
+            }
+
+            .last-update {
+                font-size: 0.7em;
+            }
+
+            .grid {
+                gap: 8px;
+            }
+
+            .card {
+                padding: 8px;
+            }
+
+            .card-title {
+                font-size: 0.85em;
+                margin-bottom: 8px;
+                padding-bottom: 5px;
+            }
+
+            .service-item {
+                padding: 6px;
+                margin-bottom: 5px;
+                font-size: 0.9em;
+            }
+
+            .metric {
+                padding: 5px 0;
+            }
+
+            .progress-bar {
+                height: 16px;
+            }
+
+            .progress-text {
+                font-size: 0.7em;
+            }
+
+            .alert {
+                padding: 6px 10px;
+                font-size: 0.8em;
+            }
+
+            .pihole-stats {
+                gap: 6px;
+            }
+
+            .pihole-stat {
+                padding: 8px;
+            }
+
+            .pihole-stat-value {
+                font-size: 1.1em;
+            }
+
+            .pihole-stat-label {
+                font-size: 0.7em;
+            }
+        }
+
+        /* Mobile (480-599px) - 1 column */
+        @media (max-width: 599px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+
+            .wide-card {
+                grid-column: span 1;
+            }
+
+            body {
+                padding: 5px;
+                font-size: 12px;  /* Increased from 10px for better readability */
+            }
+
+            header {
+                padding: 8px;
+                margin-bottom: 8px;
+            }
+
+            h1 {
+                font-size: 1em;
+                letter-spacing: 1px;
+            }
+
+            .subtitle {
+                font-size: 0.7em;
+                letter-spacing: 0.5px;
+            }
+
+            .cursor {
+                width: 6px;
+                height: 12px;
+            }
+
+            .grid {
+                gap: 6px;
+                margin-bottom: 6px;
+            }
+
+            .card {
+                padding: 8px;
+            }
+
+            .pihole-stats {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 5px;
+            }
+
+            .service-details {
+                font-size: 0.85em;
+                line-height: 1.3;
+            }
+        }
+
+        /* Small Mobile (320-479px) - Compact mode */
+        @media (max-width: 479px) {
+            body {
+                font-size: 11px;  /* Increased from 9px for better readability */
+                padding: 4px;
+            }
+
+            header {
+                padding: 6px;
+            }
+
+            h1 {
+                font-size: 0.95em;
+            }
+
+            .subtitle {
+                font-size: 0.65em;
+            }
+
+            .last-update {
+                font-size: 0.65em;
+                margin-top: 3px;
+            }
+
+            .grid {
+                gap: 5px;
+            }
+
+            .card {
+                padding: 6px;
+            }
+
+            .card-title {
+                font-size: 0.85em;
+                margin-bottom: 6px;
+                padding-bottom: 4px;
+            }
+
+            .service-item {
+                padding: 5px;
+                margin-bottom: 4px;
+            }
+
+            .service-name {
+                font-size: 0.95em;
+            }
+
+            .service-details {
+                font-size: 0.8em;
+            }
+
+            .metric {
+                padding: 4px 0;
+                font-size: 0.9em;
+            }
+
+            .progress-bar {
+                height: 14px;
+                margin-top: 3px;
+            }
+
+            .progress-text {
+                font-size: 0.65em;
+            }
+
+            .alert {
+                padding: 5px 8px;
+                margin-bottom: 5px;
+                font-size: 0.75em;
+            }
+
+            .alert-icon {
+                font-size: 1em;
+            }
+
+            .pihole-stats {
+                gap: 4px;
+            }
+
+            .pihole-stat {
+                padding: 6px;
+            }
+
+            .pihole-stat-value {
+                font-size: 1em;
+            }
+
+            .pihole-stat-label {
+                font-size: 0.65em;
+            }
+
+            .status-dot {
+                width: 6px;
+                height: 6px;
+            }
+        }
+
+        /* Landscape orientation optimizations */
+        @media (max-height: 600px) and (orientation: landscape) {
+            body {
+                padding: 5px;
+                font-size: 12px;  /* Increased from 10px for better readability */
+            }
+
+            header {
+                padding: 6px 10px;
+            }
+
+            h1 {
+                font-size: 1em;
+            }
+
+            .card {
+                padding: 8px;
+            }
+
+            .grid {
+                gap: 6px;
+            }
+        }
+
+        /* High DPI displays */
+        @media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+            body {
+                -webkit-font-smoothing: antialiased;
+                -moz-osx-font-smoothing: grayscale;
+            }
+        }
+    </style>
+</head>
+<body>
+    <canvas id="matrix-bg"></canvas>
+
+    <div class="container">
+        <header>
+            <div class="matrix-text">01001101 01000001 01010100 01010010 01001001 01011000</div>
+            <h1>⚡ SYSTEM MATRIX<span class="cursor"></span></h1>
+            <div class="subtitle">[ ADITYA'S M1 :: SECURITY LAB ]</div>
+            <div class="last-update" id="last-update">INITIALIZING...</div>
+        </header>
+
+        <div id="dashboard-content" class="loading">
+            &gt;&gt; LOADING DATA<span class="cursor"></span>
+        </div>
+    </div>
+
+    <script>
+        // Matrix rain effect
+        const canvas = document.getElementById('matrix-bg');
+        const ctx = canvas.getContext('2d');
+
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        const matrix = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@#$%^&*()_+-=[]{}|;:,.<>?";
+        const fontSize = 12;
+        const columns = canvas.width / fontSize;
+        const drops = [];
+
+        for (let i = 0; i < columns; i++) {
+            drops[i] = Math.random() * canvas.height;
+        }
+
+        function drawMatrix() {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.05)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.fillStyle = '#00FF41';
+            ctx.font = fontSize + 'px monospace';
+
+            for (let i = 0; i < drops.length; i++) {
+                const text = matrix[Math.floor(Math.random() * matrix.length)];
+                ctx.fillText(text, i * fontSize, drops[i] * fontSize);
+
+                if (drops[i] * fontSize > canvas.height && Math.random() > 0.975) {
+                    drops[i] = 0;
+                }
+                drops[i]++;
+            }
+        }
+
+        setInterval(drawMatrix, 50);
+
+        window.addEventListener('resize', () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        });
+
+        // Detect device type and adjust
+        function detectDevice() {
+            const width = window.innerWidth;
+            let deviceType = '';
+
+            if (width >= 1920) {
+                deviceType = 'xl-desktop';
+            } else if (width >= 1400) {
+                deviceType = 'desktop';
+            } else if (width >= 1024) {
+                deviceType = 'laptop';
+            } else if (width >= 768) {
+                deviceType = 'tablet-landscape';
+            } else if (width >= 600) {
+                deviceType = 'tablet-portrait';
+            } else if (width >= 480) {
+                deviceType = 'mobile';
+            } else {
+                deviceType = 'mobile-small';
+            }
+
+            document.body.setAttribute('data-device', deviceType);
+            return deviceType;
+        }
+
+        // Initial detection
+        detectDevice();
+
+        // Update on resize with debounce
+        let resizeTimeout;
+        window.addEventListener('resize', () => {
+            clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(detectDevice, 250);
+        });
+
+        // Cache for last good data
+        let lastGoodData = null;
+        let errorCount = 0;
+
+        // Fetch and update dashboard
+        // Helper function to create progress bar
+        function createProgressBar(value, max = 100, label = '') {
+            const percentage = Math.min((value / max) * 100, 100);
+            let barClass = 'progress-bar';
+
+            if (percentage > 90) {
+                barClass += ' critical';
+            } else if (percentage > 75) {
+                barClass += ' warning';
+            }
+
+            return `
+                <div class="progress-container">
+                    <div class="${barClass}" style="width: ${percentage}%">
+                        <span class="progress-label">${label || percentage.toFixed(1) + '%'}</span>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Helper function to show notification banner
+        function showAlert(severity, service, message) {
+            const banner = document.createElement('div');
+            banner.className = `alert-banner ${severity}`;
+
+            const emoji = severity === 'critical' ? '🚨' : severity === 'warning' ? '⚠️' : 'ℹ️';
+
+            banner.innerHTML = `
+                <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;">
+                    <div style="font-weight: 900; color: ${severity === 'critical' ? '#FF0000' : severity === 'warning' ? '#FF9900' : '#00FF41'};">
+                        ${emoji} ${severity.toUpperCase()} ALERT
+                    </div>
+                    <span onclick="this.parentElement.parentElement.remove()" style="cursor: pointer; color: #00FF41; font-weight: 900;">✕</span>
+                </div>
+                <div style="color: #00FF41; font-size: 0.85em; margin-bottom: 4px;">
+                    Service: ${service.toUpperCase()}
+                </div>
+                <div style="color: #00AA33; font-size: 0.8em;">
+                    ${message}
+                </div>
+            `;
+
+            document.body.appendChild(banner);
+
+            // Auto-remove after 10 seconds
+            setTimeout(() => {
+                banner.style.animation = 'slideIn 0.3s ease reverse';
+                setTimeout(() => banner.remove(), 300);
+            }, 10000);
+        }
+
+        // Store chart instances
+        let memoryChart = null;
+        let cpuChart = null;
+        let bandwidthChart = null;
+
+        // Create mini sparkline chart
+        function createSparkline(canvasId, data, label, color = '#00FF41') {
+            const canvas = document.getElementById(canvasId);
+            if (!canvas) return;
+
+            const ctx = canvas.getContext('2d');
+
+            // Destroy existing chart
+            const existingChart = Chart.getChart(canvasId);
+            if (existingChart) {
+                existingChart.destroy();
+            }
+
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: data.map((_, i) => ''),
+                    datasets: [{
+                        label: label,
+                        data: data,
+                        borderColor: color,
+                        backgroundColor: color + '20',
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: { enabled: false }
+                    },
+                    scales: {
+                        x: { display: false },
+                        y: { display: false, min: 0, max: 100 }
+                    },
+                    animation: { duration: 500 }
+                }
+            });
+        }
+
+        // Historical data storage (last 20 data points)
+        const historyData = {
+            memory: [],
+            cpu: [],
+            disk: [],
+            bandwidth_down: [],
+            bandwidth_up: []
+        };
+
+        // Update history
+        function updateHistory(data) {
+            const maxPoints = 20;
+
+            // Memory
+            const memPercent = parseFloat(data.resources.memory.used_percent);
+            historyData.memory.push(memPercent);
+            if (historyData.memory.length > maxPoints) historyData.memory.shift();
+
+            // CPU (use load as proxy)
+            const cpuPercent = parseFloat(data.resources.cpu_load);
+            historyData.cpu.push(cpuPercent);
+            if (historyData.cpu.length > maxPoints) historyData.cpu.shift();
+
+            // Disk
+            const diskPercent = parseFloat(data.resources.disk.used_percent);
+            historyData.disk.push(diskPercent);
+            if (historyData.disk.length > maxPoints) historyData.disk.shift();
+
+            // Bandwidth
+            const downloadMbps = parseFloat(data.resources.bandwidth.download_mbps);
+            const uploadMbps = parseFloat(data.resources.bandwidth.upload_mbps);
+            historyData.bandwidth_down.push(downloadMbps);
+            historyData.bandwidth_up.push(uploadMbps);
+            if (historyData.bandwidth_down.length > maxPoints) historyData.bandwidth_down.shift();
+            if (historyData.bandwidth_up.length > maxPoints) historyData.bandwidth_up.shift();
+        }
+
+        async function updateDashboard() {
+            try {
+                const response = await fetch('/api/metrics', {
+                    headers: {
+                        'Cache-Control': 'no-cache'
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                const data = await response.json();
+
+                // Reset error count on success
+                errorCount = 0;
+                lastGoodData = data;
+
+                // Update last update time
+                document.getElementById('last-update').textContent =
+                    `[ SYNC: ${data.timestamp} ]`;
+
+                // Build compact dashboard HTML
+                const dashboardHTML = `
+                    <div class="grid">
+                        <!-- Alerts -->
+                        <div class="card wide-card">
+                            <div class="card-title">⚠ ALERTS</div>
+                            ${data.alerts.map(alert => `
+                                <div class="alert alert-${alert.severity}">
+                                    <div class="alert-icon">
+                                        ${alert.severity === 'warning' ? '⚠' :
+                                          alert.severity === 'error' ? '✖' : 'ℹ'}
+                                    </div>
+                                    <div class="alert-message">
+                                        <strong>[${alert.service.toUpperCase()}]</strong> ${alert.message}
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+
+                        <!-- System Resources -->
+                        <div class="card wide-card">
+                            <div class="card-title">💻 RESOURCES</div>
+
+                            <div class="metric">
+                                <span class="metric-label">CPU</span>
+                                <span class="metric-value">${(100 - parseFloat(data.resources.cpu.idle)).toFixed(1)}%</span>
+                            </div>
+                            <div class="progress-bar">
+                                <div class="progress-fill" style="width: ${(100 - parseFloat(data.resources.cpu.idle))}%">
+                                    <span class="progress-text">${(100 - parseFloat(data.resources.cpu.idle)).toFixed(1)}%</span>
+                                </div>
+                            </div>
+
+                            <div class="metric" style="margin-top: 8px;">
+                                <span class="metric-label">MEM</span>
+                                <span class="metric-value">${data.resources.memory.percent}%</span>
+                            </div>
+                            <div class="progress-bar">
+                                <div class="progress-fill" style="width: ${data.resources.memory.percent}%">
+                                    <span class="progress-text">${data.resources.memory.used_mb}M / ${data.resources.memory.total_mb}M</span>
+                                </div>
+                            </div>
+
+                            <div class="metric" style="margin-top: 8px;">
+                                <span class="metric-label">DISK</span>
+                                <span class="metric-value">${data.resources.disk.available_gb} FREE</span>
+                            </div>
+                            <div style="color: #00AA33; font-size: 0.8em; margin-top: 3px;">
+                                Out of ${data.resources.disk.total_gb} total (${data.resources.disk.percent}% used)
+                            </div>
+                            <div class="progress-bar" style="margin-top: 5px;">
+                                <div class="progress-fill" style="width: ${data.resources.disk.percent}%">
+                                    <span class="progress-text">${data.resources.disk.used_gb} used</span>
+                                </div>
+                            </div>
+
+                            <div class="metric" style="margin-top: 8px;">
+                                <span class="metric-label">CPU LOAD</span>
+                                <span class="metric-value">${data.resources.cpu.load_1min} (1 min)/ ${data.resources.cpu.load_5min} (5 min)/ ${data.resources.cpu.load_15min} (15 min)</span>
+                            </div>
+                        </div>
+
+                        <!-- Temperature & Performance -->
+                        <div class="card">
+                            <div class="card-title">🌡️ THERMAL & UPTIME</div>
+
+                            <div class="metric">
+                                <span class="metric-label">CPU TEMP</span>
+                                <span class="metric-value ${
+                                    data.resources.temperature.status === 'warning' ? 'status-warning' :
+                                    data.resources.temperature.status === 'cool' ? '' : ''
+                                }">${data.resources.temperature.cpu_celsius}°C</span>
+                            </div>
+                            ${data.resources.temperature.cpu_celsius !== 'N/A' ? `
+                            <div style="color: #00AA33; font-size: 0.8em; margin-top: 3px;">
+                                ${data.resources.temperature.cpu_fahrenheit}°F | ${data.resources.temperature.status.toUpperCase()}
+                            </div>
+                            ` : '<div style="color: #666; font-size: 0.8em; margin-top: 3px;">Sensor not available</div>'}
+
+                            <div class="metric" style="margin-top: 8px;">
+                                <span class="metric-label">BATTERY TEMP</span>
+                                <span class="metric-value">${data.resources.temperature.battery_celsius !== 'N/A' ? data.resources.temperature.battery_celsius + '°C' : 'N/A'}</span>
+                            </div>
+
+                            ${data.resources.fan ? `
+                            <div class="metric" style="margin-top: 8px;">
+                                <span class="metric-label">FAN SPEED</span>
+                            </div>
+                            <div style="margin-top: 4px; display: flex; gap: 4px; flex-wrap: wrap;">
+                                <button onclick="setFanSpeed(2000)" class="btn-control" style="flex: 1; min-width: 70px; padding: 4px 8px; font-size: 0.75em; background: #003D1A; border: 1px solid #00AA33; color: #00FF41; cursor: pointer; border-radius: 3px;">LOW<br><span style="font-size: 0.85em; color: #00AA33;">2000 RPM</span></button>
+                                <button onclick="setFanSpeed(3500)" class="btn-control" style="flex: 1; min-width: 70px; padding: 4px 8px; font-size: 0.75em; background: #003D1A; border: 1px solid #00AA33; color: #00FF41; cursor: pointer; border-radius: 3px;">MED<br><span style="font-size: 0.85em; color: #00AA33;">3500 RPM</span></button>
+                                <button onclick="setFanSpeed(5000)" class="btn-control" style="flex: 1; min-width: 70px; padding: 4px 8px; font-size: 0.75em; background: #003D1A; border: 1px solid #00AA33; color: #00FF41; cursor: pointer; border-radius: 3px;">HIGH<br><span style="font-size: 0.85em; color: #00AA33;">5000 RPM</span></button>
+                                <button onclick="setFanSpeed(0)" class="btn-control" style="flex: 1; min-width: 70px; padding: 4px 8px; font-size: 0.75em; background: #003D1A; border: 1px solid #00AA33; color: #00FF41; cursor: pointer; border-radius: 3px;">AUTO<br><span style="font-size: 0.85em; color: #00AA33;">SYSTEM</span></button>
+                            </div>
+                            ` : ''}
+
+                            <div class="metric" style="margin-top: 10px;">
+                                <span class="metric-label">SYSTEM UPTIME</span>
+                                <span class="metric-value">${data.resources.uptime.full}</span>
+                            </div>
+                        </div>
+
+                        <!-- Real-time Bandwidth -->
+                        <div class="card">
+                            <div class="card-title">🌐 BANDWIDTH</div>
+
+                            <div class="metric">
+                                <span class="metric-label">↓ DOWNLOAD</span>
+                                <span class="metric-value">${data.resources.bandwidth.download_mbps} Mbps</span>
+                            </div>
+
+                            <div class="metric" style="margin-top: 8px;">
+                                <span class="metric-label">↑ UPLOAD</span>
+                                <span class="metric-value">${data.resources.bandwidth.upload_mbps} Mbps</span>
+                            </div>
+
+                            <div style="color: #00AA33; font-size: 0.8em; margin-top: 8px;">
+                                Total: ↓ ${data.resources.network.received_gb} GB | ↑ ${data.resources.network.sent_gb} GB
+                            </div>
+                        </div>
+
+                        <!-- Internet Connectivity -->
+                        <div class="card">
+                            <div class="card-title">🌍 INTERNET</div>
+
+                            <div class="metric">
+                                <span class="metric-label">STATUS</span>
+                                <span class="metric-value -${data.resources.internet.status === 'online' ? 'running' : 'stopped'}">${data.resources.internet.status.toUpperCase()}</span>
+                            </div>
+
+                            <div class="metric" style="margin-top: 8px;">
+                                <span class="metric-label">GOOGLE DNS</span>
+                                <span class="metric-value">${data.resources.internet.ping_google !== 'timeout' ? data.resources.internet.ping_google + ' ms' : 'TIMEOUT'}</span>
+                            </div>
+
+                            <div class="metric" style="margin-top: 8px;">
+                                <span class="metric-label">CLOUDFLARE</span>
+                                <span class="metric-value">${data.resources.internet.ping_cloudflare !== 'timeout' ? data.resources.internet.ping_cloudflare + ' ms' : 'TIMEOUT'}</span>
+                            </div>
+                        </div>
+
+                        <!-- Port Status -->
+                        <div class="card">
+                            <div class="card-title">🔌 PORT STATUS (OPEN PORTS)</div>
+
+                            ${Object.entries(data.resources.ports)
+                                .filter(([port, info]) => info.status === 'listening')
+                                .map(([port, info], index) => `
+                                <div class="metric" style="margin-top: ${index === 0 ? '0' : '6px'};">
+                                    <span class="metric-label">PORT ${port}</span>
+                                    <span class="metric-value">${info.status.toUpperCase()}</span>
+                                </div>
+                                ${info.process !== 'none' ? `<div style="color: #00AA33; font-size: 0.75em; margin-top: 2px; margin-left: 2px;">→ ${info.process}</div>` : ''}
+                            `).join('')}
+
+                            ${Object.entries(data.resources.ports).filter(([port, info]) => info.status === 'listening').length === 0 ?
+                                '<div style="color: #FF9900; font-size: 0.85em; padding: 10px; text-align: center;">⚠ No open ports detected</div>' : ''}
+                        </div>
+
+                        <!-- Top Processes -->
+                        <div class="card wide-card">
+                            <div class="card-title">📊 TOP PROCESSES</div>
+
+                            <div style="margin-bottom: 8px; color: #00FF41; font-weight: bold; font-size: 0.85em;">BY CPU USAGE</div>
+                            ${data.resources.top_cpu.slice(0, 5).map((proc, idx) => `
+                                <div class="metric" style="margin-top: ${idx === 0 ? '0' : '4px'};">
+                                    <span class="metric-label" style="font-size: 0.75em; max-width: 60%;">${proc.name.split('/').pop()}</span>
+                                    <span class="metric-value">${proc.cpu}%</span>
+                                </div>
+                            `).join('')}
+
+                            <div style="margin: 12px 0 8px 0; color: #00FF41; font-weight: bold; font-size: 0.85em;">BY MEMORY USAGE</div>
+                            ${data.resources.top_memory.slice(0, 5).map((proc, idx) => `
+                                <div class="metric" style="margin-top: ${idx === 0 ? '0' : '4px'};">
+                                    <span class="metric-label" style="font-size: 0.75em; max-width: 60%;">${proc.name.split('/').pop()}</span>
+                                    <span class="metric-value">${proc.mem}%</span>
+                                </div>
+                            `).join('')}
+                        </div>
+
+                        <!-- Automation -->
+                        <div class="card">
+                            <div class="card-title">🤖 AUTOMATION</div>
+
+                            <div class="metric">
+                                <span class="metric-label">UNIFIED SCRIPT</span>
+                                <span class="metric-value">${data.automation.unified_script.status?.running ? '🔄 RUNNING' : '✓ READY'}</span>
+                            </div>
+
+                            <!-- Start and End Times -->
+                            <div style="color: #00AA33; font-size: 0.75em; margin-top: 5px; line-height: 1.4;">
+                                ${data.automation.unified_script.status?.started ?
+                                    `<div>▶ Started: ${data.automation.unified_script.status.started}</div>` : ''}
+                                ${data.automation.unified_script.status?.ended ?
+                                    `<div>■ Ended: ${data.automation.unified_script.status.ended}</div>` : ''}
+                                ${!data.automation.unified_script.status?.started ?
+                                    `<div>Last Run: ${data.automation.unified_script.last_run}</div>` : ''}
+                            </div>
+
+                            <div style="margin-top: 8px;">
+                                <button class="service-btn" onclick="triggerAutomation()" style="width: 100%; background: rgba(0, 100, 100, 0.4);">▶ RUN NOW</button>
+                            </div>
+
+                            <!-- Live Automation Status -->
+                            ${data.automation.unified_script.status?.tasks ? `
+                            <div style="margin-top: 10px; border-top: 1px solid #00AA33; padding-top: 8px;">
+                                <!-- Progress Bar (if running) -->
+                                ${data.automation.unified_script.status.running ? `
+                                <div style="margin-bottom: 8px;">
+                                    <div style="display: flex; justify-content: space-between; margin-bottom: 4px; align-items: center;">
+                                        <span style="color: #00FFFF; font-size: 0.8em; font-weight: bold;">
+                                            <span class="status-dot status-warning" style="display: inline-block; margin-right: 5px;"></span>
+                                            PROGRESS
+                                        </span>
+                                        <span style="color: #00FF41; font-size: 0.8em; font-weight: bold;">${data.automation.unified_script.status.progress || 0}%</span>
+                                    </div>
+                                    <div style="width: 100%; height: 16px; background: rgba(0, 50, 0, 0.5); border: 2px solid #00AA33; border-radius: 3px; overflow: hidden;">
+                                        <div style="height: 100%; background: linear-gradient(90deg, #00AA33 0%, #00FF41 50%, #00FFFF 100%); width: ${data.automation.unified_script.status.progress || 0}%; transition: width 0.5s ease; box-shadow: 0 0 10px #00FF41;"></div>
+                                    </div>
+                                </div>
+                                ` : ''}
+
+                                <!-- Task Checklist -->
+                                <div style="color: #00FFFF; font-size: 0.75em; margin-bottom: 5px; font-weight: bold;">TASKS:</div>
+                                <div style="font-size: 0.75em; max-height: 200px; overflow-y: auto;">
+                                    ${Object.entries(data.automation.unified_script.status.tasks).map(([taskName, taskInfo]) => {
+                                        let icon = '⏳'; // pending
+                                        let color = '#888';
+                                        if (taskInfo.status === 'success') {
+                                            icon = '✅';
+                                            color = '#00FF41';
+                                        } else if (taskInfo.status === 'running') {
+                                            icon = '🔄';
+                                            color = '#00FFFF';
+                                        } else if (taskInfo.status === 'warning') {
+                                            icon = '⚠️';
+                                            color = '#FF9900';
+                                        } else if (taskInfo.status === 'error') {
+                                            icon = '❌';
+                                            color = '#FF0000';
+                                        } else if (taskInfo.status === 'skipped') {
+                                            icon = '⊘';
+                                            color = '#666';
+                                        }
+
+                                        return `
+                                        <div style="display: flex; align-items: start; padding: 4px 0; border-bottom: 1px solid rgba(0, 170, 51, 0.2);">
+                                            <span style="margin-right: 6px; font-size: 1.1em;">${icon}</span>
+                                            <div style="flex: 1;">
+                                                <div style="color: ${color}; font-weight: bold;">${taskName}</div>
+                                                <div style="color: #00AA33; font-size: 0.9em; opacity: 0.8;">${taskInfo.message || 'Waiting...'}</div>
+                                            </div>
+                                        </div>
+                                        `;
+                                    }).join('')}
+                                </div>
+                            </div>
+                            ` : ''}
+
+                            <div class="metric" style="margin-top: 10px;">
+                                <span class="metric-label">STARTUP SERVICE</span>
+                                <span class="metric-value">${data.automation.startup_service.status.toUpperCase()}</span>
+                            </div>
+                            <div style="color: #00AA33; font-size: 0.8em; margin-top: 3px;">
+                                ${data.automation.startup_service.schedule.toUpperCase()}
+                            </div>
+                        </div>
+
+                        <!-- Backups -->
+                        <div class="card">
+                            <div class="card-title">💾 BACKUPS</div>
+
+                            <div class="service-item">
+                                <div class="service-name">
+                                    <span>☁ GDRIVE</span>
+                                    <span class="status-dot ${
+                                        data.backups.google_drive.in_progress === true ? 'status-warning' :
+                                        data.backups.google_drive.success === true ? 'status-running' : 'status-stopped'
+                                    }"></span>
+                                </div>
+                                <div class="service-details">
+                                    Size: ${data.backups.google_drive.size} | ${data.backups.google_drive.status.toUpperCase()}
+                                </div>
+                                <div class="service-details" style="font-size: 0.75em; opacity: 0.7;">
+                                    Started: ${data.backups.google_drive.started}
+                                </div>
+                                <div class="service-details" style="font-size: 0.75em; opacity: 0.7;">
+                                    Ended: ${data.backups.google_drive.ended}
+                                </div>
+                                <div class="service-actions">
+                                    <button class="service-btn" onclick="triggerBackup('gdrive')" style="width: 100%; background: rgba(0, 100, 200, 0.4);">▶ BACKUP NOW</button>
+                                </div>
+                                <div id="gdrive-backup-status" style="margin-top: 5px; font-size: 0.75em; color: #00AA33;"></div>
+                                <div id="gdrive-progress-container" style="display: none; margin-top: 8px;">
+                                    <div style="width: 100%; background: rgba(0, 0, 0, 0.3); border-radius: 4px; height: 20px; overflow: hidden; border: 1px solid rgba(0, 255, 65, 0.3);">
+                                        <div id="gdrive-progress-bar" style="height: 100%; background: linear-gradient(90deg, rgba(0, 255, 65, 0.4), rgba(0, 255, 65, 0.7)); transition: width 0.3s ease; width: 0%; display: flex; align-items: center; justify-content: center; font-size: 0.7em; color: #00FF41; text-shadow: 0 0 5px rgba(0, 255, 65, 0.5);"></div>
+                                    </div>
+                                    <div id="gdrive-progress-text" style="margin-top: 4px; font-size: 0.7em; color: #00FF41; opacity: 0.8;"></div>
+                                </div>
+                            </div>
+
+                            <div class="service-item">
+                                <div class="service-name">
+                                    <span>💿 EVM</span>
+                                    <span class="status-dot ${
+                                        data.backups.evm_drive.in_progress === true ? 'status-warning' :
+                                        data.backups.evm_drive.mounted === true ? 'status-running' : 'status-stopped'
+                                    }"></span>
+                                </div>
+                                <div class="service-details">
+                                    Size: ${data.backups.evm_drive.size} | ${data.backups.evm_drive.status.toUpperCase()}
+                                </div>
+                                <div class="service-details" style="font-size: 0.75em; opacity: 0.7;">
+                                    Started: ${data.backups.evm_drive.started}
+                                </div>
+                                <div class="service-details" style="font-size: 0.75em; opacity: 0.7;">
+                                    Ended: ${data.backups.evm_drive.ended}
+                                </div>
+                                <div class="service-details" style="font-size: 0.75em; opacity: 0.6;">
+                                    ${data.backups.evm_drive.mounted ? 'Mounted' : 'Not Mounted'}
+                                </div>
+                                <div class="service-actions">
+                                    <button class="service-btn" onclick="triggerBackup('evm')" style="width: 100%; background: rgba(0, 100, 200, 0.4);">▶ BACKUP NOW</button>
+                                </div>
+                                <div id="evm-backup-status" style="margin-top: 5px; font-size: 0.75em; color: #00AA33;"></div>
+                                <div id="evm-progress-container" style="display: none; margin-top: 8px;">
+                                    <div style="width: 100%; background: rgba(0, 0, 0, 0.3); border-radius: 4px; height: 20px; overflow: hidden; border: 1px solid rgba(0, 255, 65, 0.3);">
+                                        <div id="evm-progress-bar" style="height: 100%; background: linear-gradient(90deg, rgba(0, 255, 65, 0.4), rgba(0, 255, 65, 0.7)); transition: width 0.3s ease; width: 0%; display: flex; align-items: center; justify-content: center; font-size: 0.7em; color: #00FF41; text-shadow: 0 0 5px rgba(0, 255, 65, 0.5);"></div>
+                                    </div>
+                                    <div id="evm-progress-text" style="margin-top: 4px; font-size: 0.7em; color: #00FF41; opacity: 0.8;"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Services -->
+                        <div class="card">
+                            <div class="card-title">⚙ SERVICES</div>
+
+                            <div class="service-item">
+                                <div class="service-name">
+                                    <span>🛡 PI-HOLE</span>
+                                    <span class="status-dot status-${data.services.pihole.status}"></span>
+                                </div>
+                                <div class="service-details">
+                                    ${data.services.pihole.health.toUpperCase()} | ${data.services.pihole.port}
+                                </div>
+                                <div class="service-actions">
+                                    <button class="service-btn" onclick="openService('pihole')">🔗 OPEN</button>
+                                    <button class="service-btn restart-btn" onclick="restartService('pihole')">🔄 RESTART</button>
+                                </div>
+                            </div>
+
+                            <div class="service-item">
+                                <div class="service-name">
+                                    <span>🔐 TAILSCALE</span>
+                                    <span class="status-dot status-${data.services.tailscale.status}"></span>
+                                </div>
+                                <div class="service-details">
+                                    ${data.services.tailscale.ip} | EXIT ${data.services.tailscale.exit_node.toUpperCase()}
+                                </div>
+                                <div class="service-actions">
+                                    <button class="service-btn" onclick="openService('tailscale')">🔗 ADMIN</button>
+                                    <button class="service-btn restart-btn" disabled title="Use Tailscale app">🔄 USE APP</button>
+                                </div>
+                            </div>
+
+                            <div class="service-item">
+                                <div class="service-name">
+                                    <span>🐳 COLIMA</span>
+                                    <span class="status-dot status-${data.services.colima.status}"></span>
+                                </div>
+                                <div class="service-details">
+                                    ${data.services.colima.containers} CONTAINERS
+                                </div>
+                                <div class="service-actions">
+                                    <button class="service-btn" disabled>🔗 NO WEB UI</button>
+                                    <button class="service-btn restart-btn" onclick="restartService('colima')">🔄 RESTART</button>
+                                </div>
+                            </div>
+
+                            <div class="service-item">
+                                <div class="service-name">
+                                    <span>🎬 PLEX</span>
+                                    <span class="status-dot status-${data.services.plex.status}"></span>
+                                </div>
+                                <div class="service-details">
+                                    ${data.services.plex.health.toUpperCase()} | PORT ${data.services.plex.port}
+                                </div>
+                                <div class="service-actions">
+                                    <button class="service-btn" onclick="openService('plex')">🔗 OPEN</button>
+                                    <button class="service-btn restart-btn" onclick="restartService('plex')">🔄 RESTART</button>
+                                </div>
+                            </div>
+
+                            <div class="service-item">
+                                <div class="service-name">
+                                    <span>🔒 CADDY</span>
+                                    <span class="status-dot status-${data.services.caddy.status}"></span>
+                                </div>
+                                <div class="service-details">
+                                    ${data.services.caddy.health.toUpperCase()} | PORT ${data.services.caddy.port}
+                                </div>
+                                <div class="service-actions">
+                                    <button class="service-btn" disabled>🔗 NO WEB UI</button>
+                                    <button class="service-btn restart-btn" onclick="restartService('caddy')">🔄 RESTART</button>
+                                </div>
+                            </div>
+
+                            <div class="service-item">
+                                <div class="service-name">
+                                    <span>🤖 CLAWDBOT</span>
+                                    <span class="status-dot status-${data.services.clawdbot.status}"></span>
+                                </div>
+                                <div class="service-details">
+                                    ${data.services.clawdbot.health.toUpperCase()} | PORT ${data.services.clawdbot.port}
+                                </div>
+                                <div class="service-actions">
+                                    <button class="service-btn" onclick="openService('clawdbot')">🔗 OPEN</button>
+                                    <button class="service-btn restart-btn" onclick="restartService('clawdbot')">🔄 RESTART</button>
+                                </div>
+                            </div>
+
+                            <div class="service-item">
+                                <div class="service-name">
+                                    <span>📂 FILE BROWSER</span>
+                                    <span class="status-dot status-running"></span>
+                                </div>
+                                <div class="service-details">
+                                    EXTERNAL DRIVES MANAGER | PORT ${window.location.port}
+                                </div>
+                                <div class="service-actions">
+                                    <button class="service-btn" onclick="openService('filebrowser')">🔗 OPEN</button>
+                                    <button class="service-btn restart-btn" onclick="window.location.reload()" title="Reload page">🔄 RELOAD</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Pi-hole Stats -->
+                        <div class="card">
+                            <div class="card-title">🛡 PI-HOLE PROTECTION</div>
+
+                            <!-- Today's Activity Grid -->
+                            <div style="color: #00FF41; font-size: 0.85em; margin-bottom: 8px; opacity: 0.8; border-bottom: 1px solid #003300; padding-bottom: 4px;">
+                                ▸ TODAY'S ACTIVITY
+                            </div>
+
+                            <div class="pihole-stats">
+                                <div class="pihole-stat">
+                                    <div class="pihole-stat-value">${parseInt(data.pihole_stats.queries_today).toLocaleString()}</div>
+                                    <div class="pihole-stat-label">DNS QUERIES</div>
+                                </div>
+
+                                <div class="pihole-stat">
+                                    <div class="pihole-stat-value">${parseInt(data.pihole_stats.ads_blocked_today).toLocaleString()}</div>
+                                    <div class="pihole-stat-label">ADS BLOCKED</div>
+                                </div>
+
+                                <div class="pihole-stat">
+                                    <div class="pihole-stat-value">${parseFloat(data.pihole_stats.percent_blocked).toFixed(1)}%</div>
+                                    <div class="pihole-stat-label">BLOCK RATE</div>
+                                </div>
+
+                                <div class="pihole-stat">
+                                    <div class="pihole-stat-value">${parseInt(data.pihole_stats.unique_domains).toLocaleString()}</div>
+                                    <div class="pihole-stat-label">UNIQUE DOMAINS</div>
+                                </div>
+                            </div>
+
+                            <!-- Lifetime Stats -->
+                            <div style="color: #00FF41; font-size: 0.85em; margin: 12px 0 8px 0; opacity: 0.8; border-bottom: 1px solid #003300; padding-bottom: 4px;">
+                                ▸ LIFETIME STATISTICS
+                            </div>
+
+                            <div class="pihole-stats">
+                                <div class="pihole-stat">
+                                    <div class="pihole-stat-value">${(parseInt(data.pihole_stats.queries_total) / 1000000).toFixed(1)}M</div>
+                                    <div class="pihole-stat-label">TOTAL QUERIES</div>
+                                </div>
+
+                                <div class="pihole-stat">
+                                    <div class="pihole-stat-value">${(parseInt(data.pihole_stats.ads_blocked_total) / 1000000).toFixed(1)}M</div>
+                                    <div class="pihole-stat-label">TOTAL BLOCKED</div>
+                                </div>
+
+                                <div class="pihole-stat">
+                                    <div class="pihole-stat-value">${(parseInt(data.pihole_stats.domains_blocked) / 1000).toFixed(0)}K</div>
+                                    <div class="pihole-stat-label">BLOCKLIST SIZE</div>
+                                </div>
+
+                                <div class="pihole-stat">
+                                    <div class="pihole-stat-value">${parseInt(data.pihole_stats.queries_cached).toLocaleString()}</div>
+                                    <div class="pihole-stat-label">CACHED</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                document.getElementById('dashboard-content').innerHTML = dashboardHTML;
+
+                // Load file browser after dashboard renders
+                setTimeout(function() { loadFileBrowser(); }, 500);
+
+            } catch (error) {
+                console.error('Error fetching dashboard data:', error);
+                errorCount++;
+
+                // If we have cached data, use it instead of showing error
+                if (lastGoodData && errorCount < 3) {
+                    // Update with cached data silently
+                    const data = lastGoodData;
+                    document.getElementById('last-update').textContent =
+                        `[ SYNC: ${data.timestamp} ] (CACHED)`;
+                    // Don't regenerate HTML, just update timestamp
+                } else if (errorCount >= 3) {
+                    // Only show error after 3 consecutive failures (15 seconds)
+                    document.getElementById('dashboard-content').innerHTML = `
+                        <div class="error">
+                            <strong>✖ CONNECTION LOST</strong><br>
+                            &gt;&gt; Retrying... (${error.message})
+                        </div>
+                    `;
+                }
+            }
+        }
+
+        // Open service in new tab
+        function openService(service) {
+            // Tailscale IP for remote access (primary)
+            const tailscaleIP = '100.118.129.106';
+
+            const serviceUrls = {
+                'pihole': {
+                    primary: `http://${tailscaleIP}:8080/admin`,
+                    fallback: 'http://localhost:8080/admin'
+                },
+                'plex': {
+                    primary: `http://${tailscaleIP}:32400/web`,
+                    fallback: 'http://localhost:32400/web'
+                },
+                'tailscale': {
+                    primary: 'https://login.tailscale.com/admin/machines',
+                    fallback: 'https://login.tailscale.com/admin/machines'
+                },
+                'clawdbot': {
+                    primary: 'http://localhost:18789',
+                    fallback: 'https://aditya-m1-macbook-pro-term.tailb48eb5.ts.net'
+                },
+                'filebrowser': {
+                    primary: `http://${tailscaleIP}:8888/file-browser.html`,
+                    fallback: 'http://localhost:8888/file-browser.html'
+                }
+            };
+
+            const urlConfig = serviceUrls[service];
+            if (!urlConfig) return;
+
+            // Try primary URL first (Tailscale), fallback to localhost
+            const url = urlConfig.primary || urlConfig.fallback;
+            if (url) {
+                const newWindow = window.open(url, '_blank');
+
+                // Check if window opened successfully
+                setTimeout(() => {
+                    try {
+                        if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
+                            // If primary failed, try fallback
+                            if (urlConfig.primary !== url && urlConfig.fallback) {
+                                window.open(urlConfig.fallback, '_blank');
+                            } else {
+                                alert(`⚠ Could not open ${service.toUpperCase()}\n\nTry accessing:\nTailscale: ${urlConfig.primary || 'N/A'}\nLocal: ${urlConfig.fallback || 'N/A'}`);
+                            }
+                        }
+                    } catch (e) {
+                        // Popup blocked or other error
+                        alert(`⚠ Could not open ${service.toUpperCase()}\n\nPlease allow popups or manually navigate to:\n${url}`);
+                    }
+                }, 500);
+            }
+        }
+
+        // Restart service
+        async function restartService(service) {
+            const confirmMsg = `Are you sure you want to restart ${service.toUpperCase()}?\n\nThis may cause brief service interruption.`;
+
+            if (!confirm(confirmMsg)) {
+                return;
+            }
+
+            try {
+                // Show loading state
+                const btn = event.target;
+                const originalText = btn.innerHTML;
+                btn.innerHTML = '⏳ RESTARTING...';
+                btn.disabled = true;
+
+                const response = await fetch(`/api/restart/${service}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    alert(`✅ ${result.message}`);
+                    // Trigger dashboard refresh
+                    setTimeout(updateDashboard, 2000);
+                } else {
+                    alert(`❌ ${result.message}`);
+                }
+
+                // Restore button
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+
+            } catch (error) {
+                alert(`❌ Failed to restart ${service}: ${error.message}`);
+
+                // Restore button
+                event.target.innerHTML = '🔄 RESTART';
+                event.target.disabled = false;
+            }
+        }
+
+        // Trigger unified automation manually
+        async function triggerAutomation() {
+            const confirmMsg = 'Are you sure you want to run the unified automation script now?\n\nThis will:\n- Run backups (Google Drive, EVM)\n- Perform maintenance tasks\n- Generate reports\n\nCheck logs at ~/Claude-Code/Logs/unified-automation.log';
+
+            if (!confirm(confirmMsg)) {
+                return;
+            }
+
+            try {
+                // Show loading state
+                const btn = event.target;
+                const originalText = btn.innerHTML;
+                btn.innerHTML = '⏳ RUNNING...';
+                btn.disabled = true;
+
+                const response = await fetch('/api/trigger/automation', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    alert(`✅ ${result.message}\n\nThe automation is running in the background.`);
+                } else {
+                    alert(`❌ ${result.message}`);
+                }
+
+                // Restore button after a delay and start monitoring
+                setTimeout(() => {
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                    startAutomationMonitoring();
+                }, 5000);
+
+            } catch (error) {
+                alert(`❌ Failed to trigger automation: ${error.message}`);
+
+                // Restore button
+                event.target.innerHTML = '▶ RUN NOW';
+                event.target.disabled = false;
+            }
+        }
+
+        // Monitor automation status with live updates
+        let automationMonitorInterval = null;
+
+        async function checkAutomationStatus() {
+            try {
+                const response = await fetch('/api/automation/status', {
+                    headers: { 'Cache-Control': 'no-cache' }
+                });
+                const data = await response.json();
+
+                const statusDiv = document.getElementById('automation-status');
+                const currentTaskSpan = document.getElementById('automation-current-task');
+                const progressBar = document.getElementById('automation-progress-bar');
+                const progressText = document.getElementById('automation-progress-text');
+                const tasksDiv = document.getElementById('automation-tasks');
+
+                if (data.running) {
+                    // Show status section
+                    statusDiv.style.display = 'block';
+
+                    // Update current task
+                    currentTaskSpan.textContent = data.current_task || 'Running...';
+
+                    // Update progress bar
+                    const progress = data.progress || 0;
+                    progressBar.style.width = progress + '%';
+                    progressText.textContent = progress + '%';
+
+                    // Display tasks with checkmarks
+                    const tasksHTML = Object.entries(data.tasks || {}).map(([name, task]) => {
+                        let icon = '';
+                        let color = '#00AA33';
+
+                        if (task.status === 'success') {
+                            icon = '✅';
+                            color = '#00FF41';
+                        } else if (task.status === 'checking') {
+                            icon = '⏳';
+                            color = '#00FFFF';
+                        } else if (task.status === 'warning') {
+                            icon = '⚠️';
+                            color = '#FF9900';
+                        } else if (task.status === 'error') {
+                            icon = '❌';
+                            color = '#FF0000';
+                        }
+
+                        return `<div style="color: ${color}; padding: 2px 0;">${icon} ${name}: ${task.message}</div>`;
+                    }).join('');
+
+                    tasksDiv.innerHTML = tasksHTML;
+                } else if (data.completed) {
+                    // Show completion briefly
+                    statusDiv.style.display = 'block';
+                    currentTaskSpan.textContent = '✅ All tasks completed successfully!';
+                    progressBar.style.width = '100%';
+                    progressText.textContent = '100%';
+                    tasksDiv.innerHTML = '<div style="color: #00FF41; text-align: center; padding: 10px;">All services checked and healthy!</div>';
+
+                    // Hide after 10 seconds
+                    setTimeout(() => {
+                        statusDiv.style.display = 'none';
+                        if (automationMonitorInterval) {
+                            clearInterval(automationMonitorInterval);
+                            automationMonitorInterval = null;
+                        }
+                    }, 10000);
+                } else {
+                    statusDiv.style.display = 'none';
+                }
+
+            } catch (error) {
+                console.error('Error checking automation status:', error);
+            }
+        }
+
+        function startAutomationMonitoring() {
+            // Stop any existing monitoring
+            if (automationMonitorInterval) {
+                clearInterval(automationMonitorInterval);
+            }
+
+            // Start polling every 2 seconds
+            automationMonitorInterval = setInterval(checkAutomationStatus, 2000);
+
+            // Check immediately
+            checkAutomationStatus();
+        }
+
+        // Trigger backup manually
+        async function triggerBackup(type) {
+            const backupNames = {
+                'gdrive': 'Google Drive',
+                'evm': 'EVM Drive'
+            };
+
+            const confirmMsg = `Start ${backupNames[type]} backup now?\n\nThis will backup your Documents folder.\nCheck logs at ~/.backup_logs/`;
+
+            if (!confirm(confirmMsg)) {
+                return;
+            }
+
+            try {
+                // Show loading state
+                const btn = event.target;
+                const originalText = btn.innerHTML;
+                const statusDiv = document.getElementById(`${type}-backup-status`);
+
+                btn.innerHTML = '⏳ STARTING...';
+                btn.disabled = true;
+                statusDiv.textContent = 'Initializing backup...';
+                statusDiv.style.color = '#00FF41';
+
+                const response = await fetch(`/api/backup/${type}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    statusDiv.textContent = '✅ Backup started! Checking progress...';
+
+                    // Start checking backup status
+                    checkBackupStatus(type, btn, originalText, statusDiv);
+                } else {
+                    alert(`❌ ${result.message}`);
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                    statusDiv.textContent = `❌ ${result.message}`;
+                    statusDiv.style.color = '#FF0000';
+                }
+
+            } catch (error) {
+                alert(`❌ Failed to trigger backup: ${error.message}`);
+                event.target.innerHTML = '▶ BACKUP NOW';
+                event.target.disabled = false;
+                document.getElementById(`${type}-backup-status`).textContent = `❌ Error: ${error.message}`;
+                document.getElementById(`${type}-backup-status`).style.color = '#FF0000';
+            }
+        }
+
+        // Check backup status
+        async function checkBackupStatus(type, btn, originalText, statusDiv) {
+            try {
+                const response = await fetch('/api/backup/status');
+                const data = await response.json();
+                const backupData = data[type];
+
+                // Get progress bar elements
+                const progressContainer = document.getElementById(`${type}-progress-container`);
+                const progressBar = document.getElementById(`${type}-progress-bar`);
+                const progressText = document.getElementById(`${type}-progress-text`);
+
+                if (backupData.status === 'running') {
+                    statusDiv.textContent = '🔄 Backup in progress...';
+                    statusDiv.style.color = '#FFFF00';
+
+                    // Show and update progress bar
+                    if (progressContainer && progressBar && progressText) {
+                        progressContainer.style.display = 'block';
+
+                        const percent = backupData.percent || 0;
+                        const message = backupData.message || 'Processing...';
+
+                        progressBar.style.width = percent + '%';
+                        progressBar.textContent = percent + '%';
+                        progressText.textContent = message;
+                    }
+
+                    // Check again in 3 seconds
+                    setTimeout(() => checkBackupStatus(type, btn, originalText, statusDiv), 3000);
+                } else if (backupData.status === 'completed') {
+                    statusDiv.textContent = '✅ Backup completed successfully!';
+                    statusDiv.style.color = '#00FF41';
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+
+                    // Show 100% progress briefly
+                    if (progressContainer && progressBar && progressText) {
+                        progressBar.style.width = '100%';
+                        progressBar.textContent = '100%';
+                        progressText.textContent = 'Backup complete!';
+                    }
+
+                    // Clear status and hide progress bar after 10 seconds
+                    setTimeout(() => {
+                        statusDiv.textContent = '';
+                        if (progressContainer) {
+                            progressContainer.style.display = 'none';
+                        }
+                        updateDashboard(); // Refresh to show new backup time
+                    }, 10000);
+                } else if (backupData.status === 'error') {
+                    statusDiv.textContent = '❌ Backup completed with errors';
+                    statusDiv.style.color = '#FF0000';
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+
+                    // Hide progress bar
+                    if (progressContainer) {
+                        progressContainer.style.display = 'none';
+                    }
+                } else {
+                    // Idle or unknown - stop checking
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+
+                    // Hide progress bar
+                    if (progressContainer) {
+                        progressContainer.style.display = 'none';
+                    }
+                }
+            } catch (error) {
+                console.error('Error checking backup status:', error);
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+
+                // Hide progress bar on error
+                const progressContainer = document.getElementById(`${type}-progress-container`);
+                if (progressContainer) {
+                    progressContainer.style.display = 'none';
+                }
+            }
+        }
+
+        // Fan speed control
+        async function setFanSpeed(rpm) {
+            try {
+                // Show notification
+                const notification = document.createElement('div');
+                notification.style.cssText = 'position: fixed; top: 80px; left: 50%; transform: translateX(-50%); background: #003D1A; border: 2px solid #00FF41; color: #00FF41; padding: 15px 25px; border-radius: 5px; z-index: 10000; font-size: 0.9em;';
+
+                if (rpm === 0) {
+                    notification.innerHTML = '🔄 Opening Macs Fan Control - Set to AUTO mode';
+                } else {
+                    notification.innerHTML = `🔄 Opening Macs Fan Control - Set to ${rpm} RPM`;
+                }
+
+                document.body.appendChild(notification);
+
+                // Call API to set fan speed
+                const response = await fetch('/api/fan/set', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ rpm: rpm })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    notification.innerHTML = `✅ ${data.message}`;
+                    notification.style.borderColor = '#00FF41';
+
+                    // Refresh dashboard after 2 seconds
+                    setTimeout(() => {
+                        updateDashboard();
+                        notification.remove();
+                    }, 3000);
+                } else {
+                    notification.innerHTML = `❌ ${data.message}`;
+                    notification.style.borderColor = '#FF6B35';
+                    notification.style.color = '#FF6B35';
+
+                    setTimeout(() => notification.remove(), 5000);
+                }
+            } catch (error) {
+                console.error('Error setting fan speed:', error);
+                alert('Failed to control fan: ' + error.message);
+            }
+        }
+
+        // Adaptive polling system
+        let pollInterval = 15000; // Start with 15 seconds (idle)
+        let lastActivity = Date.now();
+        let isAutomationRunning = false;
+        let currentIntervalId = null;
+
+        // Detect user activity
+        function trackActivity() {
+            lastActivity = Date.now();
+            adjustPollInterval();
+        }
+
+        // Listen for user interactions
+        document.addEventListener('mousemove', trackActivity);
+        document.addEventListener('click', trackActivity);
+        document.addEventListener('keydown', trackActivity);
+
+        // Adjust polling interval based on activity and automation status
+        function adjustPollInterval() {
+            const timeSinceActivity = Date.now() - lastActivity;
+            let newInterval = 15000; // Default: 15s (idle)
+
+            if (isAutomationRunning) {
+                newInterval = 3000; // 3s during automation/backup
+            } else if (timeSinceActivity < 60000) {
+                newInterval = 5000; // 5s when user is active (last 60s)
+            }
+
+            // Only restart interval if it changed
+            if (newInterval !== pollInterval) {
+                pollInterval = newInterval;
+                console.log(`Adaptive polling: ${pollInterval}ms`);
+
+                if (currentIntervalId) {
+                    clearInterval(currentIntervalId);
+                }
+                currentIntervalId = setInterval(updateDashboard, pollInterval);
+            }
+        }
+
+        // Enhanced updateDashboard to check automation status
+        const originalUpdateDashboard = updateDashboard;
+        updateDashboard = async function() {
+            try {
+                await originalUpdateDashboard();
+
+                // Check if automation is running
+                const statusResponse = await fetch('/api/automation/status');
+                const statusData = await statusResponse.json();
+                const wasRunning = isAutomationRunning;
+                isAutomationRunning = statusData.running || false;
+
+                // Adjust polling if automation status changed
+                if (wasRunning !== isAutomationRunning) {
+                    adjustPollInterval();
+                }
+            } catch (error) {
+                console.error('Error in updateDashboard:', error);
+            }
+        };
+
+        // Initial load and start adaptive polling
+        updateDashboard();
+        currentIntervalId = setInterval(updateDashboard, pollInterval);
+
+        // Check activity every 10 seconds to adjust polling
+        setInterval(adjustPollInterval, 10000);
+    </script>
+</body>
+</html>

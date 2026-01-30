@@ -1,0 +1,42 @@
+#!/bin/bash
+
+# Pre-commit Hook: Security Scanner
+# Automatically runs security scan before allowing commits
+# Prevents committing code with hardcoded secrets
+
+set -e
+
+echo ""
+echo "🔒 Running security scan before commit..."
+echo ""
+
+# Run security scanner
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+if [ -f "$PROJECT_ROOT/scripts/utilities/security-scan.sh" ]; then
+    "$PROJECT_ROOT/scripts/utilities/security-scan.sh"
+    SCAN_RESULT=$?
+
+    if [ $SCAN_RESULT -ne 0 ]; then
+        echo ""
+        echo "❌ Commit blocked due to security issues!"
+        echo ""
+        echo "Fix the issues above and try again."
+        echo ""
+        echo "To bypass this check (NOT RECOMMENDED):"
+        echo "  git commit --no-verify"
+        echo ""
+        exit 1
+    fi
+
+    echo ""
+    echo "✅ Security scan passed! Proceeding with commit..."
+    echo ""
+else
+    echo "⚠️  Security scanner not found. Proceeding with commit..."
+    echo "   Run: ./scripts/utilities/security-scan.sh"
+    echo ""
+fi
+
+exit 0

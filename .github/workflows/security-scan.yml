@@ -1,0 +1,109 @@
+name: Security Scan
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  security-scan:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Run Security Scanner
+      run: |
+        chmod +x scripts/utilities/security-scan.sh
+        ./scripts/utilities/security-scan.sh
+
+    - name: Check for secrets in git history
+      run: |
+        echo "Checking git history for potential secrets..."
+        # Check if any committed files contain patterns that shouldn't be there
+        if git log --all --full-history --source --find-copies-harder --diff-filter=D -S "BOT_TOKEN=" --pretty=format:"%H" | head -1; then
+          echo "❌ Found potential bot token in git history!"
+          echo "This requires git history cleanup (git filter-branch or BFG)"
+          exit 1
+        fi
+        echo "✅ No secrets found in git history"
+
+    - name: Verify .gitignore is working
+      run: |
+        echo "Verifying .gitignore configuration..."
+
+        # Check if config.json exists in repo (it shouldn't)
+        if git ls-files | grep -q "config/config.json"; then
+          echo "❌ config.json is tracked by git!"
+          exit 1
+        fi
+
+        # Check if .dashboard_auth exists in repo (it shouldn't)
+        if git ls-files | grep -q ".dashboard_auth"; then
+          echo "❌ .dashboard_auth is tracked by git!"
+          exit 1
+        fi
+
+        # Check if logs are tracked (they shouldn't be)
+        if git ls-files | grep -q "^logs/.*\.log$"; then
+          echo "❌ Log files are tracked by git!"
+          exit 1
+        fi
+
+        echo "✅ .gitignore is working correctly"
+
+    - name: Validate config template
+      run: |
+        echo "Validating config.template.json..."
+
+        # Check file exists
+        if [ ! -f "config/config.template.json" ]; then
+          echo "❌ config.template.json not found!"
+          exit 1
+        fi
+
+        # Check it has placeholders
+        if ! grep -q "YOUR_BOT_TOKEN_HERE" config/config.template.json; then
+          echo "❌ config.template.json missing placeholder for bot token!"
+          exit 1
+        fi
+
+        if ! grep -q "YOUR_CHAT_ID_HERE" config/config.template.json; then
+          echo "❌ config.template.json missing placeholder for chat ID!"
+          exit 1
+        fi
+
+        # Verify it's valid JSON
+        if ! python3 -m json.tool config/config.template.json > /dev/null; then
+          echo "❌ config.template.json is not valid JSON!"
+          exit 1
+        fi
+
+        echo "✅ config.template.json is valid"
+
+    - name: Check for hardcoded paths
+      run: |
+        echo "Checking for hardcoded user-specific paths..."
+
+        # Look for /Users/aditya (should not exist except in docs)
+        if grep -r "/Users/aditya" --include="*.sh" --include="*.py" \
+           --exclude-dir=".git" --exclude-dir="docs" --exclude="*.md" .; then
+          echo "❌ Found hardcoded user-specific paths!"
+          exit 1
+        fi
+
+        echo "✅ No hardcoded user paths found"
+
+    - name: Security Summary
+      if: success()
+      run: |
+        echo ""
+        echo "╔════════════════════════════════════════════════════════╗"
+        echo "║          ✅ ALL SECURITY CHECKS PASSED                 ║"
+        echo "╚════════════════════════════════════════════════════════╝"
+        echo ""
+        echo "This code is safe to merge and deploy."
+        echo ""
