@@ -129,7 +129,8 @@
 
   "dashboard_auth": {
     "username": "admin",
-    "password_hash": "WILL_BE_SET_BY_SETUP_SCRIPT",
+    "password_hash": "eb02a5d8adb2758f07af192a4ab68ddf4cdfeefd4cc72790b363c95c5b229af3",
+    "_comment_password": "Default password is 'matrix2026' - change via setup.sh or change-dashboard-password.sh",
     "session_timeout_minutes": 60,
     "max_failed_attempts": 3,
     "lockout_duration_seconds": 180
