@@ -184,9 +184,9 @@ get_services() {
     },"
     fi
 
-    # Remove trailing comma and output
+    # Remove trailing comma from LAST line only and output
     if [ -n "$SERVICES_OUTPUT" ]; then
-        echo "$SERVICES_OUTPUT" | sed 's/,$//'
+        echo "$SERVICES_OUTPUT" | sed '$s/,$//'
     fi
 
     echo "  },"
@@ -450,8 +450,8 @@ get_backups() {
 
     BACKUP_LOGS_DIR=$(get_config "paths.backup_logs_dir")
 
-    # Google Drive backup
-    LATEST_GD_LOG=$(ls -t "$BACKUP_LOGS_DIR"/backup_*.log 2>/dev/null | grep -v "evm" | head -1)
+    # Google Drive backup - sort by filename (timestamp) instead of modification time
+    LATEST_GD_LOG=$(ls -1 "$BACKUP_LOGS_DIR"/backup_*.log 2>/dev/null | grep -v "evm" | sort -r | head -1)
     DOCUMENTS_DIR=$(get_config "backup.paths.documents")
 
     if [ -n "$LATEST_GD_LOG" ]; then
@@ -498,8 +498,8 @@ get_backups() {
     echo "      \"success\": $GD_SUCCESS"
     echo "    },"
 
-    # EVM backup
-    LATEST_EVM_LOG=$(ls -t "$BACKUP_LOGS_DIR"/backup_evm_*.log 2>/dev/null | head -1)
+    # EVM backup - sort by filename (timestamp) instead of modification time
+    LATEST_EVM_LOG=$(ls -1 "$BACKUP_LOGS_DIR"/backup_evm_*.log 2>/dev/null | sort -r | head -1)
     EVM_BACKUP_DIR=$(get_config "backup.paths.evm_backup_dir")
 
     if [ -n "$LATEST_EVM_LOG" ]; then
@@ -709,24 +709,37 @@ get_alerts() {
 
     ALERT_COUNT=0
 
+    # Re-calculate memory and disk percentages for alert checks
+    # (Since get_resources runs in parallel, variables aren't accessible)
+    MEM_TOTAL_BYTES=$(sysctl -n hw.memsize)
+    MEM_TOTAL=$((MEM_TOTAL_BYTES / 1024 / 1024))
+    MEM_USED=$(top -l 1 | grep PhysMem | awk '{print $2}' | sed 's/M//')
+    LOCAL_MEM_PERCENT=$(awk "BEGIN {printf \"%.1f\", ($MEM_USED/$MEM_TOTAL)*100}")
+
+    if [ -d "/System/Volumes/Data" ]; then
+        LOCAL_DISK_PERCENT=$(df -H /System/Volumes/Data | tail -1 | awk '{print $5}' | sed 's/%//')
+    else
+        LOCAL_DISK_PERCENT=$(df -H / | tail -1 | awk '{print $5}' | sed 's/%//')
+    fi
+
     # Check memory usage (using config threshold)
-    if [ $(awk "BEGIN {print ($MEM_PERCENT > $MEM_THRESHOLD) ? 1 : 0}") -eq 1 ]; then
+    if [ $(awk "BEGIN {print ($LOCAL_MEM_PERCENT > $MEM_THRESHOLD) ? 1 : 0}") -eq 1 ]; then
         [ $ALERT_COUNT -gt 0 ] && echo ","
         echo "    {"
         echo "      \"severity\": \"warning\","
         echo "      \"service\": \"system\","
-        echo "      \"message\": \"High memory usage: ${MEM_PERCENT}%\""
+        echo "      \"message\": \"High memory usage: ${LOCAL_MEM_PERCENT}%\""
         echo "    }"
         ALERT_COUNT=$((ALERT_COUNT + 1))
     fi
 
     # Check disk usage (using config threshold)
-    if [ "$DISK_PERCENT" -gt "$DISK_THRESHOLD" ]; then
+    if [ "$LOCAL_DISK_PERCENT" -gt "$DISK_THRESHOLD" ]; then
         [ $ALERT_COUNT -gt 0 ] && echo ","
         echo "    {"
         echo "      \"severity\": \"warning\","
         echo "      \"service\": \"storage\","
-        echo "      \"message\": \"Disk space usage at ${DISK_PERCENT}% - Consider cleanup\""
+        echo "      \"message\": \"Disk space usage at ${LOCAL_DISK_PERCENT}% - Consider cleanup\""
         echo "    }"
         ALERT_COUNT=$((ALERT_COUNT + 1))
     fi

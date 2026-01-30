@@ -1433,23 +1433,26 @@
                                 <div style="color: #00FFFF; font-size: 0.75em; margin-bottom: 5px; font-weight: bold;">TASKS:</div>
                                 <div style="font-size: 0.75em; max-height: 200px; overflow-y: auto;">
                                     ${Object.entries(data.automation.unified_script.status.tasks).map(([taskName, taskInfo]) => {
-                                        let icon = '⏳'; // pending
+                                        let icon = '⏳'; // pending/waiting
                                         let color = '#888';
-                                        if (taskInfo.status === 'success') {
+                                        if (taskInfo.status === 'success' || taskInfo.status === 'completed') {
                                             icon = '✅';
                                             color = '#00FF41';
-                                        } else if (taskInfo.status === 'running') {
+                                        } else if (taskInfo.status === 'running' || taskInfo.status === 'checking') {
                                             icon = '🔄';
                                             color = '#00FFFF';
                                         } else if (taskInfo.status === 'warning') {
                                             icon = '⚠️';
                                             color = '#FF9900';
-                                        } else if (taskInfo.status === 'error') {
+                                        } else if (taskInfo.status === 'error' || taskInfo.status === 'failed') {
                                             icon = '❌';
                                             color = '#FF0000';
                                         } else if (taskInfo.status === 'skipped') {
                                             icon = '⊘';
                                             color = '#666';
+                                        } else if (taskInfo.status === 'idle') {
+                                            icon = '💤';
+                                            color = '#555';
                                         }
 
                                         return `
