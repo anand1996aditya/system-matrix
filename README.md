@@ -10,6 +10,30 @@ Hey there! 👋 Welcome to System Matrix - your Mac's new best friend. Think of 
 
 ---
 
+## 🎥 See It In Action
+
+<div align="center">
+  <img src="docs/screenshots/demo.gif" alt="System Matrix Demo" width="100%">
+  <p><i>System Matrix in action - real-time monitoring, alerts, and automation</i></p>
+</div>
+
+### 📸 Screenshots
+
+<table>
+  <tr>
+    <td width="50%">
+      <img src="docs/screenshots/dashboard-overview.png" alt="System Matrix Dashboard">
+      <p align="center"><i>Real-time monitoring dashboard with Matrix theme</i></p>
+    </td>
+    <td width="50%">
+      <img src="docs/screenshots/telegram-alert.jpg" alt="Telegram Alerts">
+      <p align="center"><i>Smart notifications delivered to your phone</i></p>
+    </td>
+  </tr>
+</table>
+
+---
+
 ## 🎯 What is System Matrix?
 
 You know that feeling when your Mac starts acting up, but you're not sure why? Or when you forget to run backups for weeks? System Matrix solves these problems.
@@ -438,36 +462,6 @@ See [LICENSE](LICENSE) for full details.
 - 🐛 [Open an issue](https://github.com/anand1996aditya/system-matrix/issues)
 - 💡 [Start a discussion](https://github.com/anand1996aditya/system-matrix/discussions)
 - ⭐ Star the repo if you find it useful!
-
----
-
-## 🗺️ Roadmap
-
-**Coming soon:**
-- [ ] iOS/Android companion app
-- [ ] Cloud sync for metrics history
-- [ ] More integrations (Slack, Discord, Email)
-- [ ] Plugin system for custom monitors
-- [ ] Docker container for easy deployment
-- [ ] Web-based configuration editor
-
-**Got ideas?** Open an issue or PR!
-
----
-
-## 📸 Screenshots
-
-### Dashboard Overview
-![Dashboard](docs/screenshots/dashboard.png)
-*Real-time system metrics with Matrix theme*
-
-### Telegram Alerts
-![Alerts](docs/screenshots/telegram-alert.png)
-*Smart notifications on your phone*
-
-### File Browser
-![File Browser](docs/screenshots/file-browser.png)
-*Manage files across all drives*
 
 ---
 
