@@ -23,8 +23,9 @@ jobs:
     - name: Check for secrets in git history
       run: |
         echo "Checking git history for potential secrets..."
-        # Check if any committed files contain patterns that shouldn't be there
-        if git log --all --full-history --source --find-copies-harder --diff-filter=D -S "BOT_TOKEN=" --pretty=format:"%H" | head -1; then
+        # Check for actual Telegram bot token pattern (digits:alphanumeric)
+        # This won't flag legitimate variable usage like BOT_TOKEN="$CONFIG_..."
+        if git log --all --full-history -p | grep -E '[0-9]{9,10}:[A-Za-z0-9_-]{35}' | grep -v "YOUR_BOT_TOKEN_HERE" | grep -v "123456789:ABC"; then
           echo "❌ Found potential bot token in git history!"
           echo "This requires git history cleanup (git filter-branch or BFG)"
           exit 1
