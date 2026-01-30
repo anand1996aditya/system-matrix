@@ -349,14 +349,16 @@ health_check_task() {
 
     # Check containers
     for container in pihole plex sentinel-postgres sentinel-redis; do
-        update_status "${container^}" "checking" "Checking container..."
+        # Capitalize first letter (macOS bash 3.2 compatible)
+        container_name="$(echo "$container" | sed 's/^./\U&/')"
+        update_status "$container_name" "checking" "Checking container..."
         if ! docker ps | grep -q "$container"; then
             echo "[$(date '+%Y-%m-%d %H:%M:%S')] [HEALTH] ❌ $container not running" | tee -a "$LOG_FILE"
             docker start "$container" >> "$LOG_FILE" 2>&1
-            update_status "${container^}" "warning" "Restarted"
+            update_status "$container_name" "warning" "Restarted"
             ISSUES=$((ISSUES + 1))
         else
-            update_status "${container^}" "success" "Running"
+            update_status "$container_name" "success" "Running"
         fi
     done
 
@@ -506,13 +508,31 @@ fi
 # Wait for all parallel tasks to complete (with timeout protection)
 log "Waiting for remaining tasks to complete (timeouts configured)..."
 
-# EDGE CASE: Use timeout to prevent infinite waits
-[ -n "$PID_DOCKER" ] && ((timeout "$TIMEOUT_DOCKER" wait $PID_DOCKER 2>/dev/null && log "✅ Docker cleanup complete") || log "⚠️  Docker cleanup timed out or failed")
-[ -n "$PID_LOGS" ] && ((timeout "$TIMEOUT_LOGS" wait $PID_LOGS 2>/dev/null && log "✅ Log rotation complete") || log "⚠️  Log rotation timed out or failed")
-[ -n "$PID_PIHOLE" ] && ((timeout "$TIMEOUT_PIHOLE" wait $PID_PIHOLE 2>/dev/null && log "✅ Pi-hole update complete") || log "⚠️  Pi-hole update timed out or failed")
-[ -n "$PID_HEALTH" ] && ((timeout "$TIMEOUT_HEALTH" wait $PID_HEALTH 2>/dev/null && log "✅ Health check complete") || log "⚠️  Health check timed out or failed")
-[ -n "$PID_PERF" ] && ((timeout "$TIMEOUT_PERF" wait $PID_PERF 2>/dev/null && log "✅ Performance check complete") || log "⚠️  Performance check timed out or failed")
-[ -n "$PID_DRIVES" ] && ((timeout "$TIMEOUT_DRIVES" wait $PID_DRIVES 2>/dev/null && log "✅ External drives check complete") || log "⚠️  External drives check timed out or failed")
+# EDGE CASE: Use simple wait for background processes
+# macOS doesn't have GNU timeout by default, so we use simple wait
+if [ -n "$PID_DOCKER" ]; then
+    wait $PID_DOCKER 2>/dev/null && log "✅ Docker cleanup complete" || log "⚠️  Docker cleanup failed"
+fi
+
+if [ -n "$PID_LOGS" ]; then
+    wait $PID_LOGS 2>/dev/null && log "✅ Log rotation complete" || log "⚠️  Log rotation failed"
+fi
+
+if [ -n "$PID_PIHOLE" ]; then
+    wait $PID_PIHOLE 2>/dev/null && log "✅ Pi-hole update complete" || log "⚠️  Pi-hole update failed"
+fi
+
+if [ -n "$PID_HEALTH" ]; then
+    wait $PID_HEALTH 2>/dev/null && log "✅ Health check complete" || log "⚠️  Health check failed"
+fi
+
+if [ -n "$PID_PERF" ]; then
+    wait $PID_PERF 2>/dev/null && log "✅ Performance check complete" || log "⚠️  Performance check failed"
+fi
+
+if [ -n "$PID_DRIVES" ]; then
+    wait $PID_DRIVES 2>/dev/null && log "✅ External drives check complete" || log "⚠️  External drives check failed"
+fi
 
 log ""
 log "=========================================="

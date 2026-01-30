@@ -64,7 +64,19 @@
   },
 
   "backup": {
-    "enabled": false
+    "enabled": false,
+    "scripts": {
+      "google_drive": "",
+      "evm_drive": ""
+    },
+    "paths": {
+      "documents": "${HOME}/Documents",
+      "backup_logs_dir": "${HOME}/.backup_logs"
+    },
+    "settings": {
+      "min_disk_space_gb": 10,
+      "max_wait_seconds": 300
+    }
   },
 
   "drives": {

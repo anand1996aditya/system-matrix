@@ -24,14 +24,17 @@
   },
 
   "backup": {
-    "_comment": "Backup paths will be configured during setup if drives are detected",
+    "_comment": "Backup configuration - scripts are optional, leave empty if not using backups",
     "enabled": false,
     "scripts": {
       "google_drive": "",
-      "custom_backup": ""
+      "evm_drive": ""
     },
     "paths": {
-      "documents": "${HOME}/Documents"
+      "documents": "${HOME}/Documents",
+      "evm_mount": "/Volumes/EVM",
+      "evm_backup_dir": "/Volumes/EVM/Documents_Backup",
+      "backup_logs_dir": "${HOME}/.backup_logs"
     },
     "settings": {
       "min_disk_space_gb": 10,
