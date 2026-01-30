@@ -421,26 +421,68 @@ health_check_task() {
 # ============================================
 performance_check_task() {
     local LOG_FILE="$LOG_DIR/performance.log"
+    local WARNINGS=0
 
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] [PERF] Performance check..." | tee -a "$LOG_FILE"
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] [PERF] Starting performance check..." | tee -a "$LOG_FILE"
+    update_status "Performance Check" "running" "Collecting system metrics..."
+
+    # Get number of CPU cores for load average context
+    CPU_CORES=$(sysctl -n hw.ncpu 2>/dev/null || echo 1)
 
     # Load average
-    LOAD=$(uptime | awk -F'load averages:' '{print $2}')
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] [PERF] Load:$LOAD" | tee -a "$LOG_FILE"
+    LOAD=$(uptime | awk -F'load averages:' '{print $2}' | xargs)
+    LOAD_1MIN=$(echo "$LOAD" | awk '{print $1}')
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] [PERF] Load average: $LOAD (${CPU_CORES} cores)" | tee -a "$LOG_FILE"
+
+    # Check if load is high (> number of cores)
+    if (( $(echo "$LOAD_1MIN > $CPU_CORES" | bc -l 2>/dev/null || echo 0) )); then
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] [PERF] ⚠️  High load detected" | tee -a "$LOG_FILE"
+        WARNINGS=$((WARNINGS + 1))
+    fi
 
     # CPU usage
-    CPU_INFO=$(top -l 1 | grep "CPU usage")
+    update_status "Performance Check" "running" "Checking CPU usage..."
+    CPU_INFO=$(top -l 1 | grep "CPU usage" | head -1)
+    CPU_USER=$(echo "$CPU_INFO" | awk '{print $3}' | tr -d '%')
+    CPU_SYS=$(echo "$CPU_INFO" | awk '{print $5}' | tr -d '%')
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] [PERF] $CPU_INFO" | tee -a "$LOG_FILE"
 
     # Memory
-    MEMORY=$(top -l 1 | grep PhysMem)
+    update_status "Performance Check" "running" "Checking memory usage..."
+    MEMORY=$(top -l 1 | grep PhysMem | head -1)
+    MEM_USED=$(echo "$MEMORY" | awk '{print $2}')
+    MEM_WIRED=$(echo "$MEMORY" | awk '{print $6}')
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] [PERF] $MEMORY" | tee -a "$LOG_FILE"
 
-    # Disk
-    DISK=$(df -h / | tail -1 | awk '{print "Used: "$3" Free: "$4" ("$5")"}')
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] [PERF] Disk: $DISK" | tee -a "$LOG_FILE"
+    # Disk usage
+    update_status "Performance Check" "running" "Checking disk usage..."
+    DISK_USAGE=$(df -h / | tail -1 | awk '{print $5}' | tr -d '%')
+    DISK_FREE=$(df -h / | tail -1 | awk '{print $4}')
+    DISK_INFO=$(df -h / | tail -1 | awk '{print "Used: "$3" Free: "$4" ("$5")"}')
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] [PERF] Disk: $DISK_INFO" | tee -a "$LOG_FILE"
 
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] [PERF] ✅ Check complete" | tee -a "$LOG_FILE"
+    # Check if disk is filling up (>85%)
+    if [ "$DISK_USAGE" -gt 85 ]; then
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] [PERF] ⚠️  Disk usage high: ${DISK_USAGE}%" | tee -a "$LOG_FILE"
+        WARNINGS=$((WARNINGS + 1))
+    fi
+
+    # Swap usage (if any)
+    SWAP_INFO=$(sysctl vm.swapusage 2>/dev/null | awk '{print $7}' | tr -d '%')
+    if [ -n "$SWAP_INFO" ]; then
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] [PERF] Swap: ${SWAP_INFO}% used" | tee -a "$LOG_FILE"
+    fi
+
+    # Build status message
+    if [ "$WARNINGS" -eq 0 ]; then
+        STATUS_MSG="Load: $LOAD_1MIN | Disk: ${DISK_USAGE}% | Mem: $MEM_USED"
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] [PERF] ✅ System performing well" | tee -a "$LOG_FILE"
+        update_status "Performance Check" "success" "$STATUS_MSG"
+    else
+        STATUS_MSG="$WARNINGS warning(s) - Load: $LOAD_1MIN | Disk: ${DISK_USAGE}%"
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] [PERF] ⚠️  Performance issues detected" | tee -a "$LOG_FILE"
+        update_status "Performance Check" "warning" "$STATUS_MSG"
+    fi
 }
 
 # ============================================
