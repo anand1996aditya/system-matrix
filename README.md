@@ -30,6 +30,14 @@ Hey there! 👋 Welcome to System Matrix - your Mac's new best friend. Think of 
       <p align="center"><i>Smart notifications delivered to your phone</i></p>
     </td>
   </tr>
+  <tr>
+    <td width="50%">
+      <img src="docs/screenshots/file-browser.png" alt="File Browser">
+      <p align="center"><i>Built-in file browser for managing files across all drives</i></p>
+    </td>
+    <td width="50%">
+    </td>
+  </tr>
 </table>
 
 ---
