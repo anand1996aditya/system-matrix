@@ -322,24 +322,39 @@ log_rotation_task() {
 pihole_update_task() {
     local LOG_FILE="$LOG_DIR/pihole-updates.log"
 
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] [PIHOLE] Updating..." | tee -a "$LOG_FILE"
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] [PIHOLE] Starting update..." | tee -a "$LOG_FILE"
+    update_status "Pi-hole Update" "running" "Checking Pi-hole container..."
 
     if docker ps | grep -q pihole; then
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] [PIHOLE] Container found, updating blocklists..." | tee -a "$LOG_FILE"
+        update_status "Pi-hole Update" "running" "Updating blocklists..."
+
         # Update blocklists
-        docker exec pihole pihole -g >> "$LOG_FILE" 2>&1
+        if docker exec pihole pihole -g >> "$LOG_FILE" 2>&1; then
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] [PIHOLE] Blocklists updated" | tee -a "$LOG_FILE"
+        else
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] [PIHOLE] ⚠️  Blocklist update had issues" | tee -a "$LOG_FILE"
+        fi
 
         # Update gravity
-        docker exec pihole pihole updateGravity >> "$LOG_FILE" 2>&1
+        update_status "Pi-hole Update" "running" "Updating gravity database..."
+        if docker exec pihole pihole updateGravity >> "$LOG_FILE" 2>&1; then
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] [PIHOLE] Gravity updated" | tee -a "$LOG_FILE"
+        fi
 
-        DOMAINS=$(docker exec pihole pihole -g 2>&1 | grep "domains being blocked" | awk '{print $1}')
+        # Get blocked domain count
+        DOMAINS=$(docker exec pihole pihole -g 2>&1 | grep "domains being blocked" | awk '{print $1}' | head -1)
         if [ -n "$DOMAINS" ]; then
-            echo "[$(date '+%Y-%m-%d %H:%M:%S')] [PIHOLE] ✅ $DOMAINS domains blocked" | tee -a "$LOG_FILE"
-            osascript -e "display notification \"$DOMAINS domains blocked\" with title \"Pi-hole Updated\"" 2>/dev/null
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] [PIHOLE] ✅ Update complete - $DOMAINS domains blocked" | tee -a "$LOG_FILE"
+            update_status "Pi-hole Update" "success" "Updated - $DOMAINS domains blocked"
+            osascript -e "display notification \"$DOMAINS domains blocked\" with title \"Pi-hole Updated\"" 2>/dev/null || true
         else
             echo "[$(date '+%Y-%m-%d %H:%M:%S')] [PIHOLE] ✅ Update complete" | tee -a "$LOG_FILE"
+            update_status "Pi-hole Update" "success" "Blocklists and gravity updated"
         fi
     else
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] [PIHOLE] ❌ Container not running" | tee -a "$LOG_FILE"
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] [PIHOLE] Container not running, skipping" | tee -a "$LOG_FILE"
+        update_status "Pi-hole Update" "skipped" "Container not running"
     fi
 }
 
@@ -434,30 +449,71 @@ performance_check_task() {
 external_drives_check() {
     local LOG_FILE="$LOG_DIR/external-drives.log"
     local ISSUES=0
+    local MOUNTED_COUNT=0
+    local TOTAL_COUNT=0
 
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] [DRIVES] Checking external drives..." | tee -a "$LOG_FILE"
+    update_status "External Drives" "running" "Scanning for external drives..."
 
-    # Check drives from config
-    DRIVE_COUNT=$(get_config "drives" | python3 -c "import sys, json; print(len(json.load(sys.stdin)))" 2>/dev/null || echo 0)
+    # Check /Volumes for mounted drives (macOS)
+    VOLUMES_COUNT=$(ls -1 /Volumes 2>/dev/null | grep -v "Macintosh HD" | wc -l | tr -d ' ')
 
-    for i in $(seq 0 $((DRIVE_COUNT - 1))); do
-        DRIVE_NAME=$(get_config "drives.$i.name")
-        DRIVE_PATH=$(get_config "drives.$i.path")
-        DRIVE_ENABLED=$(get_config "drives.$i.enabled")
+    if [ "$VOLUMES_COUNT" -gt 0 ]; then
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] [DRIVES] Found $VOLUMES_COUNT external volume(s)" | tee -a "$LOG_FILE"
 
-        if [ "$DRIVE_ENABLED" = "true" ] && [ -d "$DRIVE_PATH" ]; then
-            SPACE=$(df -h "$DRIVE_PATH" | tail -1 | awk '{print $4}')
-            PERCENT=$(df -h "$DRIVE_PATH" | tail -1 | awk '{print $5}')
-            echo "[$(date '+%Y-%m-%d %H:%M:%S')] [DRIVES] ✅ $DRIVE_NAME: $SPACE free ($PERCENT used)" | tee -a "$LOG_FILE"
-        elif [ "$DRIVE_ENABLED" = "true" ]; then
-            echo "[$(date '+%Y-%m-%d %H:%M:%S')] [DRIVES] ⚠️  $DRIVE_NAME not mounted" | tee -a "$LOG_FILE"
-        fi
-    done
+        for drive in /Volumes/*; do
+            if [ -d "$drive" ] && [ "$(basename "$drive")" != "Macintosh HD" ]; then
+                DRIVE_NAME=$(basename "$drive")
+                TOTAL_COUNT=$((TOTAL_COUNT + 1))
 
-    if [ "$ISSUES" -eq 0 ]; then
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] [DRIVES] ✅ All critical drives available" | tee -a "$LOG_FILE"
+                if [ -r "$drive" ]; then
+                    SPACE=$(df -h "$drive" 2>/dev/null | tail -1 | awk '{print $4}')
+                    PERCENT=$(df -h "$drive" 2>/dev/null | tail -1 | awk '{print $5}')
+                    echo "[$(date '+%Y-%m-%d %H:%M:%S')] [DRIVES] ✅ $DRIVE_NAME: $SPACE free ($PERCENT used)" | tee -a "$LOG_FILE"
+                    MOUNTED_COUNT=$((MOUNTED_COUNT + 1))
+                else
+                    echo "[$(date '+%Y-%m-%d %H:%M:%S')] [DRIVES] ⚠️  $DRIVE_NAME: Not accessible" | tee -a "$LOG_FILE"
+                    ISSUES=$((ISSUES + 1))
+                fi
+            fi
+        done
+    fi
+
+    # Also check drives from config if specified
+    DRIVE_COUNT=$(get_config "drives.custom_drives" 2>/dev/null | python3 -c "import sys, json; d=json.load(sys.stdin); print(len([x for x in d if x.get('enabled', False)]))" 2>/dev/null || echo 0)
+
+    if [ "$DRIVE_COUNT" -gt 0 ]; then
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] [DRIVES] Checking $DRIVE_COUNT configured drive(s)..." | tee -a "$LOG_FILE"
+
+        for i in $(seq 0 $((DRIVE_COUNT - 1))); do
+            DRIVE_NAME=$(get_config "drives.custom_drives.$i.name" 2>/dev/null)
+            DRIVE_PATH=$(get_config "drives.custom_drives.$i.path" 2>/dev/null)
+            DRIVE_ENABLED=$(get_config "drives.custom_drives.$i.enabled" 2>/dev/null)
+
+            if [ "$DRIVE_ENABLED" = "true" ] && [ -d "$DRIVE_PATH" ]; then
+                SPACE=$(df -h "$DRIVE_PATH" 2>/dev/null | tail -1 | awk '{print $4}')
+                PERCENT=$(df -h "$DRIVE_PATH" 2>/dev/null | tail -1 | awk '{print $5}')
+                echo "[$(date '+%Y-%m-%d %H:%M:%S')] [DRIVES] ✅ $DRIVE_NAME: $SPACE free ($PERCENT used)" | tee -a "$LOG_FILE"
+                TOTAL_COUNT=$((TOTAL_COUNT + 1))
+                MOUNTED_COUNT=$((MOUNTED_COUNT + 1))
+            elif [ "$DRIVE_ENABLED" = "true" ]; then
+                echo "[$(date '+%Y-%m-%d %H:%M:%S')] [DRIVES] ⚠️  $DRIVE_NAME not mounted at $DRIVE_PATH" | tee -a "$LOG_FILE"
+                TOTAL_COUNT=$((TOTAL_COUNT + 1))
+                ISSUES=$((ISSUES + 1))
+            fi
+        done
+    fi
+
+    # Update final status
+    if [ "$TOTAL_COUNT" -eq 0 ]; then
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] [DRIVES] ℹ️  No external drives found" | tee -a "$LOG_FILE"
+        update_status "External Drives" "info" "No external drives detected"
+    elif [ "$ISSUES" -eq 0 ]; then
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] [DRIVES] ✅ All drives accessible ($MOUNTED_COUNT/$TOTAL_COUNT)" | tee -a "$LOG_FILE"
+        update_status "External Drives" "success" "$MOUNTED_COUNT/$TOTAL_COUNT drives accessible"
     else
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] [DRIVES] ⚠️  $ISSUES critical drive(s) unavailable" | tee -a "$LOG_FILE"
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] [DRIVES] ⚠️  $ISSUES drive(s) unavailable ($MOUNTED_COUNT/$TOTAL_COUNT accessible)" | tee -a "$LOG_FILE"
+        update_status "External Drives" "warning" "$ISSUES drives unavailable ($MOUNTED_COUNT/$TOTAL_COUNT accessible)"
     fi
 }
 
