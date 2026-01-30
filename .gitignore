@@ -1,8 +1,12 @@
-# Configuration files with secrets
+# ============================================
+# Configuration & Secrets (NEVER COMMIT)
+# ============================================
 config/config.json
 config/.dashboard_auth
 
-# Runtime logs
+# ============================================
+# Runtime Data & Logs
+# ============================================
 logs/*.log
 logs/**/*.log
 logs/cache/
@@ -12,7 +16,25 @@ logs/automation-status.json
 logs/*.lock
 logs/*.pid
 
+# ============================================
+# Backups Directory
+# ============================================
+backups/
+!backups/.gitkeep
+
+# ============================================
+# User Notes & Scratch Files
+# ============================================
+NOTES.md
+notes.md
+TODO.md
+scratch/
+.personal/
+notes/
+
+# ============================================
 # Python
+# ============================================
 __pycache__/
 *.py[cod]
 *$py.class
@@ -33,15 +55,69 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+MANIFEST
 
-# Backup files
-*.bak
-*.backup
+# ============================================
+# Database Files (future expansion)
+# ============================================
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+
+# ============================================
+# Certificates & Keys
+# ============================================
+*.pem
+*.key
+*.crt
+*.cert
+*.p12
+ssl/
+certs/
+*.pfx
+
+# ============================================
+# IDE & Editors
+# ============================================
+# VSCode
+.vscode/
+*.code-workspace
+
+# JetBrains IDEs (PyCharm, IntelliJ, etc.)
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Vim
+*.swp
+*.swo
 *~
-.cleanup-backup-*
+.*.swp
+.*.swo
 
-# OS files
-.DS_Store
+# Emacs
+\#*\#
+.\#*
+
+# Atom
+.atom/
+
+# TextMate
+*.tmproj
+*.tmproject
+tmtags
+
+# ============================================
+# macOS System Files
+# ============================================
+*.DS_Store
+.DS_Store?
 .AppleDouble
 .LSOverride
 Icon
@@ -53,33 +129,109 @@ Icon
 .Trashes
 .VolumeIcon.icns
 .com.apple.timemachine.donotpresent
+.apdisk
+
+# ============================================
+# Windows System Files
+# ============================================
 Thumbs.db
 ehthumbs.db
 Desktop.ini
+$RECYCLE.BIN/
 
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
+# ============================================
+# Backup Files
+# ============================================
+*.bak
+*.backup
+.cleanup-backup-*
+*.orig
 
-# Temporary files
+# ============================================
+# Temporary Files
+# ============================================
 *.tmp
 .cache/
 tmp/
+temp/
+*.temp
 
-# Environment variables
+# ============================================
+# Downloads & Uploads
+# ============================================
+downloads/
+uploads/
+
+# ============================================
+# Environment Variables
+# ============================================
 .env
 .env.local
 .env.*.local
+.envrc
 
-# Test files
+# ============================================
+# Docker (user-specific)
+# ============================================
+docker-compose.override.yml
+.docker/
+
+# ============================================
+# Node.js (if added later)
+# ============================================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+yarn.lock
+.npm
+.yarn
+
+# ============================================
+# Homebrew
+# ============================================
+Brewfile.lock.json
+
+# ============================================
+# Test Files & Coverage
+# ============================================
 test_output/
 *.test.log
+coverage/
+.coverage
+htmlcov/
+*.cover
+.pytest_cache/
+.tox/
+.hypothesis/
 
-# User-specific files (not to be committed)
-notes.md
-TODO.md
-.personal/
+# ============================================
+# Large Media Files
+# ============================================
+*.mov
+*.mp4
+*.avi
+*.mkv
+*.iso
+*.dmg
 docs/screenshots/*.mov
+
+# ============================================
+# Generated Documentation
+# ============================================
+docs/build/
+site/
+_site/
+.jekyll-cache/
+.sass-cache/
+
+# ============================================
+# Archive Files
+# ============================================
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.rar
+*.7z

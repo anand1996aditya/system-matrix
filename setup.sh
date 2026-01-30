@@ -44,18 +44,59 @@ if ! command -v python3 &> /dev/null; then
     MISSING_DEPS+=("python3")
 fi
 
+if ! command -v brew &> /dev/null; then
+    MISSING_DEPS+=("homebrew")
+fi
+
+# Check for optional but recommended dependencies
 if ! command -v jq &> /dev/null; then
     echo -e "${YELLOW}  ⚠️  jq not found (optional, but recommended for config validation)${NC}"
 fi
 
 if ! command -v docker &> /dev/null; then
-    echo -e "${YELLOW}  ⚠️  Docker not found (required for Pi-hole, Plex, etc.)${NC}"
+    echo -e "${YELLOW}  ⚠️  Docker not found (optional, for Pi-hole, Plex, etc.)${NC}"
 fi
 
+# If missing required dependencies, offer to install them
 if [ ${#MISSING_DEPS[@]} -gt 0 ]; then
-    echo -e "${RED}ERROR: Missing required dependencies: ${MISSING_DEPS[*]}${NC}"
-    echo "Please install them and run this script again."
-    exit 1
+    echo -e "${RED}  ✗ Missing required dependencies: ${MISSING_DEPS[*]}${NC}"
+    echo ""
+
+    # Check if installer exists
+    if [ -f "$SCRIPT_DIR/scripts/install/install-dependencies.sh" ]; then
+        echo "Would you like to automatically install missing dependencies?"
+        echo ""
+        read -p "Run automatic installer? (Y/n): " -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+            echo ""
+            "$SCRIPT_DIR/scripts/install/install-dependencies.sh"
+
+            # Check if installation succeeded
+            if [ $? -ne 0 ]; then
+                echo -e "${RED}Dependency installation failed. Please install manually.${NC}"
+                exit 1
+            fi
+
+            echo ""
+            echo -e "${GREEN}✓ Dependencies installed! Continuing with setup...${NC}"
+            echo ""
+        else
+            echo -e "${RED}Please install dependencies manually and run setup again:${NC}"
+            echo "  • Homebrew: https://brew.sh"
+            echo "  • Python 3: brew install python3"
+            echo ""
+            echo "Or run: ./scripts/install/install-dependencies.sh"
+            exit 1
+        fi
+    else
+        echo -e "${RED}Please install these dependencies:${NC}"
+        echo "  • Homebrew: https://brew.sh"
+        echo "  • Python 3: brew install python3"
+        echo ""
+        echo "Or run: ./scripts/install/install-dependencies.sh"
+        exit 1
+    fi
 fi
 
 echo -e "${GREEN}✓ All required dependencies found${NC}\n"

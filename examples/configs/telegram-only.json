@@ -1,0 +1,91 @@
+{
+  "_comment": "Telegram Alerts Only - No automation, just notifications",
+  "_description": "Get alerts on your phone without running automated tasks. Lightweight monitoring.",
+
+  "system": {
+    "name": "System Matrix Dashboard",
+    "version": "1.0.0",
+    "install_path": "${HOME}/system-matrix",
+    "user": "${USER}"
+  },
+
+  "paths": {
+    "base_dir": "${HOME}/system-matrix",
+    "dashboard_dir": "${HOME}/system-matrix/dashboard",
+    "scripts_dir": "${HOME}/system-matrix/scripts",
+    "logs_dir": "${HOME}/system-matrix/logs",
+    "config_dir": "${HOME}/system-matrix/config",
+    "cache_dir": "${HOME}/system-matrix/logs/cache",
+    "alert_state_dir": "${HOME}/system-matrix/logs/alert-state",
+    "metrics_state_dir": "${HOME}/system-matrix/logs/metrics-state"
+  },
+
+  "services": {
+    "dashboard": {
+      "port": 8888,
+      "host": "0.0.0.0",
+      "auth_required": true
+    },
+    "auto_detect": true,
+    "show_only_installed": true
+  },
+
+  "notifications": {
+    "telegram": {
+      "enabled": true,
+      "bot_token": "YOUR_BOT_TOKEN_HERE",
+      "chat_id": "YOUR_CHAT_ID_HERE",
+      "cooldown": {
+        "_comment": "More frequent alerts since we're only using Telegram",
+        "critical": 300,
+        "warning": 1800,
+        "info": 3600
+      }
+    }
+  },
+
+  "alerts": {
+    "_comment": "Standard alert thresholds",
+    "memory_threshold_percent": 90,
+    "disk_threshold_percent": 75,
+    "cpu_temp_warning_celsius": 70,
+    "cpu_temp_critical_celsius": 85,
+    "backup_age_warning_hours": 24,
+    "ssh_brute_force_threshold": 100,
+    "bandwidth_spike_mbps": 50,
+    "io_wait_threshold_percent": 20
+  },
+
+  "automation": {
+    "unified_script": {
+      "_comment": "Automation disabled - alerts only",
+      "enabled": false
+    }
+  },
+
+  "backup": {
+    "enabled": false
+  },
+
+  "drives": {
+    "auto_detect": true,
+    "exclude": ["Macintosh HD"]
+  },
+
+  "monitoring": {
+    "metrics_cache_ttl_seconds": 10,
+    "pihole_cache_ttl_seconds": 5,
+    "bandwidth_sample_interval_seconds": 1,
+    "ping_timeout_ms": 200,
+    "internet_check_hosts": ["8.8.8.8", "1.1.1.1"]
+  },
+
+  "dashboard_auth": {
+    "username": "admin",
+    "password_hash": "eb02a5d8adb2758f07af192a4ab68ddf4cdfeefd4cc72790b363c95c5b229af3",
+    "_comment_password": "Default password is 'matrix2026' - CHANGE THIS!",
+    "session_timeout_minutes": 60,
+    "max_failed_attempts": 3,
+    "lockout_duration_seconds": 180
+  }
+}

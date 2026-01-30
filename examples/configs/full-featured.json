@@ -1,0 +1,132 @@
+{
+  "_comment": "Full-Featured System Matrix Configuration - Everything enabled!",
+  "_description": "Maximum monitoring, alerts, and automation. For power users who want complete control.",
+
+  "system": {
+    "name": "System Matrix Dashboard",
+    "version": "1.0.0",
+    "install_path": "${HOME}/system-matrix",
+    "user": "${USER}"
+  },
+
+  "paths": {
+    "base_dir": "${HOME}/system-matrix",
+    "dashboard_dir": "${HOME}/system-matrix/dashboard",
+    "scripts_dir": "${HOME}/system-matrix/scripts",
+    "logs_dir": "${HOME}/system-matrix/logs",
+    "config_dir": "${HOME}/system-matrix/config",
+    "cache_dir": "${HOME}/system-matrix/logs/cache",
+    "alert_state_dir": "${HOME}/system-matrix/logs/alert-state",
+    "metrics_state_dir": "${HOME}/system-matrix/logs/metrics-state",
+    "backup_logs_dir": "${HOME}/.backup_logs"
+  },
+
+  "backup": {
+    "enabled": true,
+    "scripts": {
+      "google_drive": "${HOME}/backup_documents_to_gdrive.sh",
+      "custom_backup": "${HOME}/backup_documents_to_evm.sh"
+    },
+    "paths": {
+      "documents": "${HOME}/Documents",
+      "evm_mount": "/Volumes/EVM",
+      "evm_backup_dir": "/Volumes/EVM/Documents_Backup"
+    },
+    "settings": {
+      "min_disk_space_gb": 10,
+      "max_wait_seconds": 300
+    }
+  },
+
+  "drives": {
+    "auto_detect": true,
+    "custom_drives": [],
+    "exclude": ["Macintosh HD"]
+  },
+
+  "services": {
+    "dashboard": {
+      "port": 8888,
+      "host": "0.0.0.0",
+      "auth_required": true
+    },
+    "auto_detect": true,
+    "show_only_installed": true
+  },
+
+  "notifications": {
+    "telegram": {
+      "enabled": true,
+      "bot_token": "YOUR_BOT_TOKEN_HERE",
+      "chat_id": "YOUR_CHAT_ID_HERE",
+      "cooldown": {
+        "critical": 600,
+        "warning": 3600,
+        "info": 7200
+      }
+    },
+    "email": {
+      "enabled": false,
+      "smtp_server": "smtp.gmail.com",
+      "smtp_port": 587,
+      "from_address": "your-email@gmail.com",
+      "to_address": "your-email@gmail.com",
+      "password": "your-app-password"
+    }
+  },
+
+  "alerts": {
+    "_comment": "Aggressive alert thresholds - catch everything early",
+    "memory_threshold_percent": 85,
+    "disk_threshold_percent": 70,
+    "cpu_temp_warning_celsius": 65,
+    "cpu_temp_critical_celsius": 80,
+    "backup_age_warning_hours": 24,
+    "ssh_brute_force_threshold": 50,
+    "bandwidth_spike_mbps": 100,
+    "io_wait_threshold_percent": 15,
+    "swap_usage_threshold_gb": 2,
+    "network_latency_threshold_ms": 100
+  },
+
+  "automation": {
+    "unified_script": {
+      "enabled": true,
+      "schedule": "Daily at 3:00 AM",
+      "tasks": {
+        "backup": true,
+        "docker_cleanup": "auto",
+        "log_rotation": true,
+        "pihole_update": "auto",
+        "health_check": true,
+        "performance_check": true,
+        "external_drives_check": "auto"
+      },
+      "timeouts": {
+        "docker_cleanup": 60,
+        "log_rotation": 30,
+        "pihole_update": 120,
+        "health_check": 30,
+        "performance_check": 30,
+        "external_drives": 30
+      }
+    }
+  },
+
+  "monitoring": {
+    "metrics_cache_ttl_seconds": 5,
+    "pihole_cache_ttl_seconds": 3,
+    "bandwidth_sample_interval_seconds": 1,
+    "ping_timeout_ms": 150,
+    "internet_check_hosts": ["8.8.8.8", "1.1.1.1", "1.0.0.1"]
+  },
+
+  "dashboard_auth": {
+    "username": "admin",
+    "password_hash": "eb02a5d8adb2758f07af192a4ab68ddf4cdfeefd4cc72790b363c95c5b229af3",
+    "_comment_password": "Default password is 'matrix2026' - CHANGE THIS IMMEDIATELY!",
+    "session_timeout_minutes": 30,
+    "max_failed_attempts": 3,
+    "lockout_duration_seconds": 300
+  }
+}
