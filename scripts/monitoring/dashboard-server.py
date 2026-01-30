@@ -475,14 +475,15 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
                 result = {'success': False, 'message': ''}
 
                 # Run unified automation script in background
-                automation_script = os.path.expanduser("~/Claude-Code/Scripts/unified-automation.sh")
+                automation_script = str(Path(config.get('paths.scripts_dir')) / 'automation' / 'unified-automation.sh')
 
                 if os.path.exists(automation_script):
                     # Run in background
                     subprocess.Popen([automation_script],
                                    stdout=subprocess.PIPE,
                                    stderr=subprocess.PIPE)
-                    result = {'success': True, 'message': 'Automation script started in background. Check logs at ~/Claude-Code/Logs/unified-automation.log'}
+                    log_path = str(Path(config.get('paths.logs_dir')) / 'unified-automation.log')
+                    result = {'success': True, 'message': f'Automation script started in background. Check logs at {log_path}'}
                 else:
                     result = {'success': False, 'message': f'Automation script not found at {automation_script}'}
 
@@ -608,7 +609,7 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
         # Automation status endpoint
         elif parsed_path.path == '/api/automation/status':
             try:
-                status_file = os.path.expanduser("~/Claude-Code/Logs/automation-status.json")
+                status_file = str(Path(config.get('paths.logs_dir')) / 'automation-status.json')
 
                 if os.path.exists(status_file):
                     with open(status_file, 'r') as f:
@@ -628,6 +629,60 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
                 self.send_header('Content-type', 'application/json')
                 self.end_headers()
                 self.wfile.write(json.dumps({'error': str(e)}).encode())
+
+        # Startup service status endpoint
+        elif parsed_path.path == '/api/startup/status':
+            try:
+                status_file = str(Path(config.get('paths.logs_dir')) / 'startup-status.json')
+
+                if os.path.exists(status_file):
+                    with open(status_file, 'r') as f:
+                        status_data = json.load(f)
+                else:
+                    status_data = {'running': False, 'services': {}}
+
+                self.send_response(200)
+                self.send_header('Content-type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.send_header('Cache-Control', 'no-cache')
+                self.end_headers()
+                self.wfile.write(json.dumps(status_data).encode())
+
+            except Exception as e:
+                self.send_response(500)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'error': str(e)}).encode())
+
+        # Trigger startup service check
+        elif parsed_path.path == '/api/startup/trigger':
+            try:
+                result = {'success': False, 'message': ''}
+
+                # Run startup service management script
+                startup_script = str(Path(config.get('paths.scripts_dir')) / 'utilities' / 'manage-services.sh')
+
+                if os.path.exists(startup_script):
+                    # Run in background
+                    subprocess.Popen([startup_script],
+                                   stdout=subprocess.PIPE,
+                                   stderr=subprocess.PIPE)
+                    result = {'success': True, 'message': 'Service check started. Monitor status in the dashboard.'}
+                else:
+                    result = {'success': False, 'message': f'Startup script not found at {startup_script}'}
+
+                # Send JSON response
+                self.send_response(200)
+                self.send_header('Content-type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                self.wfile.write(json.dumps(result).encode())
+
+            except Exception as e:
+                self.send_response(500)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'success': False, 'message': str(e)}).encode())
 
         else:
             self.send_error(404, "Not found")
@@ -978,6 +1033,30 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
                 self.end_headers()
                 self.wfile.write(json.dumps({'success': False, 'message': str(e)}).encode())
 
+        # API endpoint for startup service status
+        elif parsed_path.path == '/api/startup/status':
+            try:
+                status_file = str(Path(config.get('paths.logs_dir')) / 'startup-status.json')
+
+                if os.path.exists(status_file):
+                    with open(status_file, 'r') as f:
+                        status_data = json.load(f)
+                else:
+                    status_data = {'running': False, 'tasks': {}}
+
+                self.send_response(200)
+                self.send_header('Content-type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.send_header('Cache-Control', 'no-cache')
+                self.end_headers()
+                self.wfile.write(json.dumps(status_data).encode())
+
+            except Exception as e:
+                self.send_response(500)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'error': str(e)}).encode())
+
         # API endpoint for metrics
         elif parsed_path.path == '/api/metrics':
             global METRICS_IN_PROGRESS
@@ -1111,7 +1190,7 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
 
     def log_message(self, format, *args):
         # Log to file instead of console
-        log_dir = os.path.expanduser("~/Claude-Code/Logs")
+        log_dir = config.get('paths.logs_dir')
         os.makedirs(log_dir, exist_ok=True)
         log_file = os.path.join(log_dir, "dashboard-server.log")
 
