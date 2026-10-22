@@ -131,7 +131,7 @@ cp examples/configs/minimal-config.json config/config.json
 "services": {
   "dashboard": {
     "port": 8889,  // Change from 8888
-    "host": "0.0.0.0",
+    "host": "127.0.0.1",  // Loopback; use a TLS proxy for remote access
     "auth_required": true
   }
 }
@@ -176,21 +176,16 @@ cp examples/configs/minimal-config.json config/config.json
 
 ## Security Notes
 
-⚠️ **IMPORTANT:** All examples use default credentials:
+⚠️ **IMPORTANT:** The examples have no password. `dashboard_auth.password_hash` is left as a placeholder, and the dashboard server refuses to start until a password is configured.
 
-```
-Username: admin
-Password: matrix2026
-```
-
-**You MUST change these immediately!**
-
-Run:
+Set one with:
 ```bash
 ./scripts/utilities/change-dashboard-password.sh
 ```
 
-Or manually update `dashboard_auth.password_hash` in `config/config.json`.
+The script writes a salted PBKDF2-HMAC-SHA256 hash to `config/config.json`. Do not use an unsalted SHA-256 hash.
+
+The examples also bind the dashboard to `127.0.0.1`. Remote access requires TLS: put Tailscale Serve or Caddy in front. See the main README, "Dashboard Credentials & Security".
 
 ---
 

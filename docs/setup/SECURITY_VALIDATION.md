@@ -208,10 +208,22 @@ Add to README.md:
 - Excludes alert-state/
 - Excludes cache/
 
+**Dashboard Security (4 tests):**
+- Path traversal and credential regression tests (tests/test_dashboard_security.py)
+- Dashboard server compiles
+- PBKDF2 password helper exists
+- Path containment helper exists
+
 **Script Validation (6 tests):**
 - Scripts use config system
 - No hardcoded tokens
 - No hardcoded paths
+
+The dashboard regression tests cover the 23 Oct 2026 audit findings:
+- `..` traversal and symlink escapes are rejected by the file browser (F1)
+- the server refuses to start without a configured password (F2)
+- the default bind host is `127.0.0.1` (F3)
+- POST endpoints require the `X-Requested-With: SystemMatrix` header and CORS is same-origin only (F4)
 
 ### Example Output
 
@@ -220,7 +232,7 @@ Add to README.md:
 ║              Security Test Suite                       ║
 ╚════════════════════════════════════════════════════════╝
 
-[1/3] Configuration System Tests
+[1/4] Configuration System Tests
 
 Testing: Config template exists... ✓ PASS
 Testing: Config template has bot token placeholder... ✓ PASS
@@ -230,7 +242,7 @@ Testing: Bash config loader exists... ✓ PASS
 Testing: Python config loader exists... ✓ PASS
 Testing: Python config loader is executable... ✓ PASS
 
-[2/3] Security Scanner Tests
+[2/4] Security Scanner Tests
 
 Testing: Security scanner exists... ✓ PASS
 Testing: Security scanner is executable... ✓ PASS
@@ -240,8 +252,8 @@ Testing: Security scanner is executable... ✓ PASS
 ║                    Test Results                        ║
 ╚════════════════════════════════════════════════════════╝
 
-Total Tests: 25
-Passed: 25
+Total Tests: 29
+Passed: 29
 Failed: 0
 
 ✅ All tests passed! Security configuration is correct.

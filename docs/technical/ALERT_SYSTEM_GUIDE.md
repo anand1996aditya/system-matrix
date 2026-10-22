@@ -128,7 +128,8 @@ Your System Matrix Dashboard now monitors **8 critical areas** and provides real
 
 **System Matrix Dashboard:**
 - **Local:** http://localhost:8888
-- **Tailscale:** http://100.118.129.106:8888
+- **Remote:** `tailscale serve --bg 8888`, then open the printed https URL
+  (the dashboard binds to 127.0.0.1 by default; TLS is required for remote access)
 
 **Alert Section Location:**
 - Top of dashboard (Alerts card)

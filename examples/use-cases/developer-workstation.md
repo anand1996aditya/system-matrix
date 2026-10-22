@@ -99,8 +99,8 @@ launchctl load ~/Library/LaunchAgents/basic-dashboard.plist
 # Check dashboard before starting work
 open http://localhost:8888
 
-# Quick health check
-curl localhost:8888/api/metrics | jq '.resources, .services'
+# Quick health check (needs the dashboard password)
+curl -u "$DASHBOARD_USER:$DASHBOARD_PASS" localhost:8888/api/metrics | jq '.resources, .services'
 ```
 
 ### Before Commits
@@ -297,10 +297,12 @@ fi
 ```
 
 ### Tip 2: CI/CD Integration
-Use dashboard API in CI scripts:
+Use dashboard API in CI scripts. The dashboard is loopback-only by default;
+reach it through Tailscale Serve or a TLS proxy, and pass credentials:
 ```bash
 # Check if dev machine is healthy before deploying
-MEMORY=$(curl -s your-mac:8888/api/metrics | jq -r '.resources.memory_percent')
+MEMORY=$(curl -s -u "$DASHBOARD_USER:$DASHBOARD_PASS" \
+  https://your-mac.<tailnet>.ts.net/api/metrics | jq -r '.resources.memory_percent')
 if (( $(echo "$MEMORY > 95" | bc -l) )); then
     echo "Dev machine overloaded. Wait before deploying."
     exit 1
@@ -308,17 +310,14 @@ fi
 ```
 
 ### Tip 3: Team Dashboard
-Share dashboard with team (read-only):
-```bash
-# Via Tailscale
-http://your-mac-tailscale-ip:8888
-
-# Everyone sees if dev server is healthy
-```
+Share the Tailscale Serve URL (`tailscale serve --bg 8888`) with the team.
+The dashboard still requires its password: Basic auth needs TLS, so never share
+the raw `http://host:8888` address over a network.
 
 ### Tip 4: Mobile Quick Check
 Add to iPhone home screen:
-- Open Safari: http://your-mac-tailscale-ip:8888
+- Run `tailscale serve --bg 8888` on the Mac
+- Open Safari: the printed `https://<machine>.<tailnet>.ts.net` URL
 - Share → Add to Home Screen
 - Check server health from anywhere!
 

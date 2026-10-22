@@ -651,7 +651,7 @@ A: The setup wizard detects port conflicts and lets you choose a
 
 **Q: Where are my credentials stored?**
 A: In `config/config.json` (git-ignored, never committed).
-   Default: admin/matrix2026 (CHANGE IMMEDIATELY!)
+   The password is a salted PBKDF2 hash. There is no default password.
 
 **Q: How do I change my password?**
 A: Run `./scripts/utilities/change-dashboard-password.sh`

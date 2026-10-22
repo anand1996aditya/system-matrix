@@ -13,27 +13,40 @@ import os
 import sys
 import time
 from pathlib import Path
-from urllib.parse import urlparse, parse_qs, unquote
+from urllib.parse import urlparse, parse_qs
 import mimetypes
 from datetime import datetime
 import base64
-import hashlib
-import secrets
+import hmac
 import threading
 
 # Load configuration
 script_dir = Path(__file__).parent.resolve()
 sys.path.insert(0, str(script_dir / "../utilities"))
 from config_loader import get_config
+from dashboard_auth import verify_password, is_legacy_hash
+from path_guard import resolve_within_roots
 
 # Get configuration instance
 config = get_config()
 
 # Load configuration values
-PORT = config.get('services.dashboard.port', 8888)
+PORT = int(config.get('services.dashboard.port', 8888))
+DASHBOARD_HOST = str(config.get('services.dashboard.host', '127.0.0.1') or '127.0.0.1')
 DASHBOARD_DIR = config.get('paths.dashboard_dir')
 METRICS_SCRIPT = str(Path(config.get('paths.scripts_dir')) / 'monitoring' / 'collect-metrics.sh')
 AUTH_CONFIG_FILE = str(Path(config.get('paths.config_dir')) / '.dashboard_auth')
+
+# State-changing POST requests must carry this header (CSRF protection).
+CSRF_HEADER = 'X-Requested-With'
+CSRF_HEADER_VALUE = 'SystemMatrix'
+
+# Proxy headers are ignored unless the operator explicitly runs a TLS proxy.
+TRUST_PROXY_HEADERS = config.get('dashboard_auth.trust_proxy', False) is True
+_configured_trusted_proxies = config.get('dashboard_auth.trusted_proxies', [])
+TRUSTED_PROXY_ADDRESSES = (
+    _configured_trusted_proxies if isinstance(_configured_trusted_proxies, list) else []
+)
 
 # File browser drives configuration - auto-detect or use config
 def get_drives():
@@ -100,13 +113,20 @@ METRICS_IN_PROGRESS = False
 START_TIME = None
 
 # Authentication configuration
+PLACEHOLDER_PASSWORD_HASH = "WILL_BE_SET_BY_SETUP_SCRIPT"
+
+
 def load_auth_config():
-    """Load authentication credentials from config or fallback file"""
+    """Load dashboard credentials. Fail closed when none are configured."""
     # Try loading from main config first
     username_from_config = config.get('dashboard_auth.username')
     password_hash_from_config = config.get('dashboard_auth.password_hash')
 
-    if username_from_config and password_hash_from_config and password_hash_from_config != "WILL_BE_SET_BY_SETUP_SCRIPT":
+    if (
+        username_from_config
+        and password_hash_from_config
+        and password_hash_from_config not in ("", PLACEHOLDER_PASSWORD_HASH)
+    ):
         return username_from_config, password_hash_from_config
 
     # Fallback to legacy auth file
@@ -114,24 +134,36 @@ def load_auth_config():
         try:
             with open(AUTH_CONFIG_FILE, 'r') as f:
                 auth_config = json.load(f)
-                return auth_config.get('username'), auth_config.get('password_hash')
-        except:
-            pass
+            username = auth_config.get('username')
+            password_hash = auth_config.get('password_hash')
+            if username and password_hash and password_hash not in ("", PLACEHOLDER_PASSWORD_HASH):
+                return username, password_hash
+        except Exception as e:
+            print(f"[AUTH] Could not read legacy auth file: {e}", file=sys.stderr)
 
-    # Default credentials if no config exists
-    print(f"\n⚠️  SECURITY NOTICE ⚠️")
-    print(f"No authentication configured!")
-    print(f"Please run setup.sh to configure dashboard authentication")
-    print(f"Using default credentials (INSECURE - change immediately!)\n")
-
-    default_username = "admin"
-    default_password = "matrix2026"
-    password_hash = hashlib.sha256(default_password.encode()).hexdigest()
-
-    return default_username, password_hash
+    # No default credentials: the dashboard must not start without a password.
+    print("\nERROR: No dashboard credentials configured.", file=sys.stderr)
+    print("Run ./setup.sh or ./scripts/utilities/change-dashboard-password.sh", file=sys.stderr)
+    print("to set a password. The dashboard refuses to start without one.\n", file=sys.stderr)
+    sys.exit(1)
 
 # Load authentication credentials
 AUTH_USERNAME, AUTH_PASSWORD_HASH = load_auth_config()
+
+if not (str(AUTH_PASSWORD_HASH).startswith("pbkdf2_sha256$") or is_legacy_hash(AUTH_PASSWORD_HASH)):
+    print(
+        "ERROR: dashboard_auth.password_hash is not a recognised PBKDF2 or legacy SHA-256 hash.",
+        file=sys.stderr,
+    )
+    print("Run scripts/utilities/change-dashboard-password.sh to set a new password.\n", file=sys.stderr)
+    sys.exit(1)
+
+if is_legacy_hash(AUTH_PASSWORD_HASH):
+    print(
+        "[AUTH] WARNING: dashboard password uses legacy unsalted SHA-256. "
+        "Run scripts/utilities/change-dashboard-password.sh to migrate to PBKDF2.",
+        flush=True,
+    )
 
 class DashboardHandler(http.server.SimpleHTTPRequestHandler):
     # Class-level dictionary to track failed login attempts
@@ -147,12 +179,23 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
         super().__init__(*args, directory=DASHBOARD_DIR, **kwargs)
 
     def get_client_ip(self):
-        """Get the client's IP address"""
-        # Handle both direct connections and proxy headers
+        """Return the socket peer address, which is the lockout key.
+
+        X-Forwarded-For is ignored unless dashboard_auth.trust_proxy is
+        enabled, so a client cannot rotate the header to escape lockout.
+        """
+        peer_ip = self.client_address[0]
+
+        if not TRUST_PROXY_HEADERS:
+            return peer_ip
+
+        if TRUSTED_PROXY_ADDRESSES and peer_ip not in TRUSTED_PROXY_ADDRESSES:
+            return peer_ip
+
         forwarded_for = self.headers.get('X-Forwarded-For')
         if forwarded_for:
-            return forwarded_for.split(',')[0].strip()
-        return self.client_address[0]
+            return forwarded_for.split(',')[0].strip() or peer_ip
+        return peer_ip
 
     def is_locked_out(self, ip):
         """Check if an IP address is currently locked out"""
@@ -235,13 +278,22 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
             decoded = base64.b64decode(auth_string).decode('utf-8')
             username, password = decoded.split(':', 1)
 
-            # Hash the provided password
-            password_hash = hashlib.sha256(password.encode()).hexdigest()
+            # Verify against PBKDF2 (legacy SHA-256 is accepted for migration only)
+            username_ok = hmac.compare_digest(
+                username.encode('utf-8'), str(AUTH_USERNAME).encode('utf-8')
+            )
+            password_ok = verify_password(password, AUTH_PASSWORD_HASH)
 
             # Check credentials
-            if username == AUTH_USERNAME and password_hash == AUTH_PASSWORD_HASH:
+            if username_ok and password_ok:
                 # Successful authentication
                 self.clear_failed_attempts(client_ip)
+                if is_legacy_hash(AUTH_PASSWORD_HASH):
+                    print(
+                        "[AUTH] Legacy SHA-256 password hash accepted for migration. "
+                        "Run change-dashboard-password.sh to switch to PBKDF2.",
+                        flush=True,
+                    )
                 return True
             else:
                 # Failed authentication
@@ -376,10 +428,51 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
             """
             self.wfile.write(html.encode())
 
+    def get_cors_origin(self):
+        """Return the dashboard origin for CORS, or None for cross-origin.
+
+        Only same-origin browser access is allowed. Host and Origin must match,
+        which also holds when a TLS reverse proxy forwards the original host.
+        """
+        origin = self.headers.get('Origin')
+        host = self.headers.get('Host')
+        if not origin or not host:
+            return None
+        parsed_origin = urlparse(origin)
+        if parsed_origin.scheme not in ('http', 'https'):
+            return None
+        if parsed_origin.netloc.lower() == host.lower():
+            return origin
+        return None
+
+    def check_csrf(self):
+        """Validate the CSRF guard on state-changing POST endpoints."""
+        if self.headers.get(CSRF_HEADER, '') != CSRF_HEADER_VALUE:
+            print(f"[AUTH] Rejected POST without {CSRF_HEADER} header from {self.get_client_ip()}", flush=True)
+            return False
+        if self.headers.get('Origin') and not self.get_cors_origin():
+            print(f"[AUTH] Rejected cross-origin POST from {self.get_client_ip()}", flush=True)
+            return False
+        return True
+
+    def send_json_response(self, status, payload):
+        """Send a JSON response with an explicit Content-Length."""
+        body = json.dumps(payload).encode('utf-8')
+        self.send_response(status)
+        self.send_header('Content-type', 'application/json')
+        self.send_header('Content-Length', str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
     def do_POST(self):
         # Check authentication first
         if not self.check_auth():
             self.send_auth_required()
+            return
+
+        # CSRF guard for every state-changing POST endpoint
+        if not self.check_csrf():
+            self.send_json_response(403, {'success': False, 'message': 'Forbidden: missing or invalid CSRF protection header'})
             return
 
         parsed_path = urlparse(self.path)
@@ -414,7 +507,6 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
                 # Send JSON response
                 self.send_response(200)
                 self.send_header('Content-type', 'application/json')
-                self.send_header('Access-Control-Allow-Origin', '*')
                 self.end_headers()
                 self.wfile.write(json.dumps(result).encode())
 
@@ -459,7 +551,6 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
                 # Send JSON response
                 self.send_response(200)
                 self.send_header('Content-type', 'application/json')
-                self.send_header('Access-Control-Allow-Origin', '*')
                 self.end_headers()
                 self.wfile.write(json.dumps(result).encode())
 
@@ -490,7 +581,6 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
                 # Send JSON response
                 self.send_response(200)
                 self.send_header('Content-type', 'application/json')
-                self.send_header('Access-Control-Allow-Origin', '*')
                 self.end_headers()
                 self.wfile.write(json.dumps(result).encode())
 
@@ -559,7 +649,6 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
                 # Send JSON response
                 self.send_response(200)
                 self.send_header('Content-type', 'application/json')
-                self.send_header('Access-Control-Allow-Origin', '*')
                 self.end_headers()
                 self.wfile.write(json.dumps(result).encode())
 
@@ -596,7 +685,6 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
                 # Send JSON response
                 self.send_response(200)
                 self.send_header('Content-type', 'application/json')
-                self.send_header('Access-Control-Allow-Origin', '*')
                 self.end_headers()
                 self.wfile.write(json.dumps(result).encode())
 
@@ -619,7 +707,6 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
 
                 self.send_response(200)
                 self.send_header('Content-type', 'application/json')
-                self.send_header('Access-Control-Allow-Origin', '*')
                 self.send_header('Cache-Control', 'no-cache')
                 self.end_headers()
                 self.wfile.write(json.dumps(status_data).encode())
@@ -643,7 +730,6 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
 
                 self.send_response(200)
                 self.send_header('Content-type', 'application/json')
-                self.send_header('Access-Control-Allow-Origin', '*')
                 self.send_header('Cache-Control', 'no-cache')
                 self.end_headers()
                 self.wfile.write(json.dumps(status_data).encode())
@@ -674,7 +760,6 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
                 # Send JSON response
                 self.send_response(200)
                 self.send_header('Content-type', 'application/json')
-                self.send_header('Access-Control-Allow-Origin', '*')
                 self.end_headers()
                 self.wfile.write(json.dumps(result).encode())
 
@@ -699,10 +784,11 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
                 # Perform health checks
                 health_checks = {
                     'metrics_script_exists': os.path.exists(METRICS_SCRIPT),
-                    'auth_config_exists': os.path.exists(AUTH_CONFIG_FILE),
+                    'auth_config_exists': bool(AUTH_USERNAME and AUTH_PASSWORD_HASH),
                     'dashboard_dir_exists': os.path.exists(DASHBOARD_DIR),
                     'drives_available': sum(1 for d in DRIVES if os.path.exists(d['path'])),
-                    'total_drives': len(DRIVES)
+                    'total_drives': len(DRIVES),
+                    'bound_to_loopback': is_loopback_host(DASHBOARD_HOST)
                 }
 
                 # Overall health status
@@ -751,7 +837,6 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
 
                 self.send_response(200)
                 self.send_header('Content-type', 'application/json')
-                self.send_header('Access-Control-Allow-Origin', '*')
                 self.end_headers()
                 self.wfile.write(json.dumps({'drives': drives_info}).encode())
                 return
@@ -764,13 +849,14 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
             try:
                 query_params = parse_qs(parsed_path.query)
                 requested_path = query_params.get('path', ['/'])[0]
-                requested_path = unquote(requested_path)
 
-                # Security check
-                is_allowed = any(requested_path.startswith(drive['path']) for drive in DRIVES)
-                if not is_allowed:
+                # Resolve the path and require it to stay inside a drive root.
+                # resolve_within_roots follows symlinks, so escapes are rejected.
+                resolved_path = resolve_within_roots(requested_path, [drive['path'] for drive in DRIVES])
+                if resolved_path is None:
                     self.send_error(403, 'Access denied')
                     return
+                requested_path = str(resolved_path)
 
                 # Path validation
                 if not os.path.exists(requested_path):
@@ -816,7 +902,6 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
 
                 self.send_response(200)
                 self.send_header('Content-type', 'application/json')
-                self.send_header('Access-Control-Allow-Origin', '*')
                 self.send_header('Cache-Control', 'no-cache')
                 self.end_headers()
                 self.wfile.write(json.dumps({
@@ -833,13 +918,14 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
             try:
                 query_params = parse_qs(parsed_path.query)
                 requested_path = query_params.get('path', [''])[0]
-                requested_path = unquote(requested_path)
 
-                # Security check
-                is_allowed = any(requested_path.startswith(drive['path']) for drive in DRIVES)
-                if not is_allowed:
+                # Resolve the path and require it to stay inside a drive root.
+                # resolve_within_roots follows symlinks, so escapes are rejected.
+                resolved_path = resolve_within_roots(requested_path, [drive['path'] for drive in DRIVES])
+                if resolved_path is None:
                     self.send_error(403, 'Access denied')
                     return
+                requested_path = str(resolved_path)
 
                 if not os.path.exists(requested_path):
                     self.send_error(404, 'File not found')
@@ -1022,7 +1108,6 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
                 # Send JSON response
                 self.send_response(200)
                 self.send_header('Content-type', 'application/json')
-                self.send_header('Access-Control-Allow-Origin', '*')
                 self.send_header('Cache-Control', 'no-cache')
                 self.end_headers()
                 self.wfile.write(json.dumps(result).encode())
@@ -1061,7 +1146,6 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
 
                 self.send_response(200)
                 self.send_header('Content-type', 'application/json')
-                self.send_header('Access-Control-Allow-Origin', '*')
                 self.send_header('Cache-Control', 'no-cache')
                 self.end_headers()
                 self.wfile.write(json.dumps(status_data).encode())
@@ -1084,7 +1168,6 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
                     # Return cached data
                     self.send_response(200)
                     self.send_header('Content-type', 'application/json')
-                    self.send_header('Access-Control-Allow-Origin', '*')
                     self.send_header('Cache-Control', 'no-cache')
                     self.end_headers()
                     self.wfile.write(METRICS_CACHE['data'].encode())
@@ -1096,7 +1179,6 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
                     if METRICS_CACHE['data']:
                         self.send_response(200)
                         self.send_header('Content-type', 'application/json')
-                        self.send_header('Access-Control-Allow-Origin', '*')
                         self.send_header('Cache-Control', 'no-cache')
                         self.send_header('X-Rate-Limited', 'true')
                         self.end_headers()
@@ -1128,7 +1210,6 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
                             # Send JSON response
                             self.send_response(200)
                             self.send_header('Content-type', 'application/json')
-                            self.send_header('Access-Control-Allow-Origin', '*')
                             self.send_header('Cache-Control', 'no-cache')
                             self.end_headers()
                             self.wfile.write(result.stdout.encode())
@@ -1137,7 +1218,6 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
                             if METRICS_CACHE['data']:
                                 self.send_response(200)
                                 self.send_header('Content-type', 'application/json')
-                                self.send_header('Access-Control-Allow-Origin', '*')
                                 self.end_headers()
                                 self.wfile.write(METRICS_CACHE['data'].encode())
                             else:
@@ -1147,7 +1227,6 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
                         if METRICS_CACHE['data']:
                             self.send_response(200)
                             self.send_header('Content-type', 'application/json')
-                            self.send_header('Access-Control-Allow-Origin', '*')
                             self.end_headers()
                             self.wfile.write(METRICS_CACHE['data'].encode())
                         else:
@@ -1165,7 +1244,6 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
                 if METRICS_CACHE['data']:
                     self.send_response(200)
                     self.send_header('Content-type', 'application/json')
-                    self.send_header('Access-Control-Allow-Origin', '*')
                     self.end_headers()
                     self.wfile.write(METRICS_CACHE['data'].encode())
                 else:
@@ -1178,7 +1256,6 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
                 if METRICS_CACHE['data']:
                     self.send_response(200)
                     self.send_header('Content-type', 'application/json')
-                    self.send_header('Access-Control-Allow-Origin', '*')
                     self.end_headers()
                     self.wfile.write(METRICS_CACHE['data'].encode())
                 else:
@@ -1193,6 +1270,12 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
         self.send_header("Cache-Control", "no-cache, no-store, must-revalidate, max-age=0")
         self.send_header("Pragma", "no-cache")
         self.send_header("Expires", "0")
+
+        # Restrict CORS to the dashboard's own origin; never a wildcard.
+        allowed_origin = self.get_cors_origin()
+        if allowed_origin:
+            self.send_header("Access-Control-Allow-Origin", allowed_origin)
+            self.send_header("Vary", "Origin")
 
         # Add security headers
         self.send_header("X-Frame-Options", "DENY")
@@ -1212,15 +1295,27 @@ class DashboardHandler(http.server.SimpleHTTPRequestHandler):
         with open(log_file, 'a') as f:
             f.write(f"{self.log_date_time_string()} - {format % args}\n")
 
+def is_loopback_host(host):
+    """Return True for bind addresses that only accept local clients."""
+    return host in ('127.0.0.1', '::1', 'localhost')
+
+
 if __name__ == "__main__":
     # Record server start time for health checks
     START_TIME = time.time()
 
-    # Bind to all interfaces so it's accessible via Tailscale
+    if not is_loopback_host(DASHBOARD_HOST):
+        print(f"WARNING: dashboard is bound to {DASHBOARD_HOST}, not loopback.")
+        print("         HTTP Basic auth over plain HTTP is not safe on a network.")
+        print("         Put TLS in front (Tailscale Serve or Caddy) before remote use.")
+
+    # Loopback by default. Remote access requires a TLS reverse proxy; see README.
     socketserver.TCPServer.allow_reuse_address = True
-    with socketserver.TCPServer(("0.0.0.0", PORT), DashboardHandler) as httpd:
-        print(f"Dashboard server running on port {PORT}")
-        print(f"Access via: http://localhost:{PORT}")
-        print(f"Or via Tailscale: http://100.118.129.106:{PORT}")
+    with socketserver.TCPServer((DASHBOARD_HOST, PORT), DashboardHandler) as httpd:
+        print(f"Dashboard server running on {DASHBOARD_HOST}:{PORT}")
+        if is_loopback_host(DASHBOARD_HOST):
+            print(f"Access via: http://localhost:{PORT}")
+        else:
+            print(f"Access via: http://{DASHBOARD_HOST}:{PORT} (TLS proxy required)")
         print(f"Health check: http://localhost:{PORT}/health")
         httpd.serve_forever()

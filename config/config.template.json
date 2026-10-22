@@ -60,7 +60,8 @@
     "_comment": "Services (Docker, Tailscale, Plex, Pi-hole, etc.) are auto-detected. Only installed services will be shown.",
     "dashboard": {
       "port": 8888,
-      "host": "0.0.0.0",
+      "host": "127.0.0.1",
+      "_comment_host": "Bind address. Loopback by default. Remote access requires TLS in front (Tailscale Serve or Caddy). See README.",
       "auth_required": true
     },
     "auto_detect": true,
@@ -134,10 +135,14 @@
 
   "dashboard_auth": {
     "username": "admin",
-    "password_hash": "eb02a5d8adb2758f07af192a4ab68ddf4cdfeefd4cc72790b363c95c5b229af3",
-    "_comment_password": "Default password is 'matrix2026' - change via setup.sh or change-dashboard-password.sh",
+    "password_hash": "WILL_BE_SET_BY_SETUP_SCRIPT",
+    "_comment_password": "Salted PBKDF2-HMAC-SHA256 hash written by setup.sh or change-dashboard-password.sh. The server refuses to start while this is empty or a placeholder.",
     "session_timeout_minutes": 60,
     "max_failed_attempts": 3,
-    "lockout_duration_seconds": 180
+    "lockout_duration_seconds": 180,
+    "trust_proxy": false,
+    "_comment_trust_proxy": "Only enable when a TLS reverse proxy (Caddy or Tailscale Serve) sits in front. Enables X-Forwarded-For for lockout keys.",
+    "trusted_proxies": [],
+    "_comment_trusted_proxies": "Optional proxy socket addresses allowed to set X-Forwarded-For. Empty means any peer while trust_proxy is true."
   }
 }

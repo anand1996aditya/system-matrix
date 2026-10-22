@@ -1881,8 +1881,9 @@
 
         // Open service in new tab
         function openService(service) {
-            // Tailscale IP for remote access (primary)
-            const tailscaleIP = '100.118.129.106';
+            // Use the host that served this page (localhost, LAN name, or the
+            // Tailscale Serve URL). Avoids a hardcoded IP and keeps links working.
+            const tailscaleIP = window.location.hostname;
 
             const serviceUrls = {
                 'pihole': {
@@ -1902,8 +1903,10 @@
                     fallback: 'https://aditya-m1-macbook-pro-term.tailb48eb5.ts.net'
                 },
                 'filebrowser': {
-                    primary: `http://${tailscaleIP}:8888/file-browser.html`,
-                    fallback: 'http://localhost:8888/file-browser.html'
+                    // Relative URL keeps the file browser on the dashboard origin,
+                    // whether served on localhost or through a TLS proxy.
+                    primary: 'file-browser.html',
+                    fallback: 'file-browser.html'
                 }
             };
 
@@ -1952,7 +1955,8 @@
                 const response = await fetch(`/api/restart/${service}`, {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json'
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'SystemMatrix'
                     }
                 });
 
@@ -1997,7 +2001,8 @@
                 const response = await fetch('/api/trigger/automation', {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json'
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'SystemMatrix'
                     }
                 });
 
@@ -2141,7 +2146,8 @@
                 const response = await fetch(`/api/backup/${type}`, {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json'
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'SystemMatrix'
                     }
                 });
 
@@ -2272,7 +2278,8 @@
                 const response = await fetch('/api/fan/set', {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json'
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'SystemMatrix'
                     },
                     body: JSON.stringify({ rpm: rpm })
                 });
@@ -2473,7 +2480,10 @@
                 const response = await fetch('/api/startup/trigger', {
                     method: 'POST',
                     credentials: 'include',
-                    headers: {'Content-Type': 'application/json'}
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'SystemMatrix'
+                    }
                 });
 
                 const result = await response.json();

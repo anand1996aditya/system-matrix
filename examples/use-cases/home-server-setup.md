@@ -116,18 +116,22 @@ You'll receive Telegram notifications for:
 
 ## Dashboard Access
 
-### Local Network
+### Local Only (Default)
+The dashboard binds to `127.0.0.1` and is not reachable from other machines:
 ```
-http://your-mac-ip:8888
+http://localhost:8888
 ```
 
-### Remote Access (via Tailscale)
+### Remote Access (via Tailscale Serve)
+Keep the loopback bind and let Tailscale terminate TLS:
+```bash
+tailscale serve --bg 8888
 ```
-http://your-mac-tailscale-ip:8888
-```
+Then open the printed `https://<machine>.<tailnet>.ts.net` URL.
+Do not expose port 8888 directly; Basic auth needs TLS.
 
 ### From Phone
-Add to home screen for quick access!
+Add the Tailscale Serve URL to your home screen for quick access!
 
 ## Automation Schedule
 
@@ -235,8 +239,8 @@ Set up System Matrix on each Mac with different Telegram bots.
 Or use same bot but different chat IDs.
 
 ### Tip 4: Remote Dashboard Access
-Use Tailscale for secure remote access.
-No port forwarding, no exposed services.
+Use Tailscale Serve (`tailscale serve --bg 8888`), which adds TLS in front of
+the loopback-only dashboard. No port forwarding, no exposed services.
 
 ## Cost
 

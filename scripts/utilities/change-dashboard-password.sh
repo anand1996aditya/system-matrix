@@ -54,17 +54,26 @@ if [ ${#NEW_PASSWORD} -lt 8 ]; then
     exit 1
 fi
 
-# Generate password hash using Python
-PASSWORD_HASH=$(echo -n "$NEW_PASSWORD" | python3 -c "import sys, hashlib; print(hashlib.sha256(sys.stdin.read().encode()).hexdigest())")
+# Generate a salted PBKDF2-HMAC-SHA256 hash using the shared helper
+PASSWORD_HASH=$(printf '%s' "$NEW_PASSWORD" | python3 "$SCRIPT_DIR/dashboard_auth.py" hash)
+if [ -z "$PASSWORD_HASH" ]; then
+    echo "❌ Failed to hash the new password. Configuration was not changed."
+    exit 1
+fi
 
-# Update config.json with new credentials using Python
-python3 << EOF
+# Update config.json with new credentials using Python.
+# Values travel in environment variables, not in the script body.
+NEW_USER="$NEW_USER" PASSWORD_HASH="$PASSWORD_HASH" CONFIG_FILE="$CONFIG_FILE" python3 << 'EOF'
 import json
-with open('$CONFIG_FILE', 'r') as f:
+import os
+
+config_file = os.environ['CONFIG_FILE']
+with open(config_file, 'r') as f:
     config = json.load(f)
-config['dashboard_auth']['username'] = '$NEW_USER'
-config['dashboard_auth']['password_hash'] = '$PASSWORD_HASH'
-with open('$CONFIG_FILE', 'w') as f:
+config.setdefault('dashboard_auth', {})
+config['dashboard_auth']['username'] = os.environ['NEW_USER']
+config['dashboard_auth']['password_hash'] = os.environ['PASSWORD_HASH']
+with open(config_file, 'w') as f:
     json.dump(config, f, indent=2)
 EOF
 

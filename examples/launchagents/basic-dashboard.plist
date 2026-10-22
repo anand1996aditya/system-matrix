@@ -2,6 +2,9 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+    <!-- The dashboard binds to 127.0.0.1 by default (services.dashboard.host).
+         Remote access requires TLS: run `tailscale serve --bg 8888` or a Caddy
+         reverse proxy. Do not expose port 8888 directly. -->
     <key>Label</key>
     <string>com.systemmatrix.dashboard</string>
 

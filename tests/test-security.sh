@@ -46,7 +46,7 @@ echo -e "${NC}\n"
 # ============================================
 # CONFIGURATION TESTS
 # ============================================
-echo -e "${BLUE}[1/3] Configuration System Tests${NC}\n"
+echo -e "${BLUE}[1/4] Configuration System Tests${NC}\n"
 
 run_test "Config template exists" \
     "[ -f config/config.template.json ]"
@@ -72,7 +72,7 @@ run_test "Python config loader is executable" \
 # ============================================
 # SECURITY SCANNER TESTS
 # ============================================
-echo -e "\n${BLUE}[2/3] Security Scanner Tests${NC}\n"
+echo -e "\n${BLUE}[2/4] Security Scanner Tests${NC}\n"
 
 run_test "Security scanner exists" \
     "[ -f scripts/utilities/security-scan.sh ]"
@@ -95,7 +95,7 @@ run_test "GitHub Actions workflow exists" \
 # ============================================
 # GITIGNORE TESTS
 # ============================================
-echo -e "\n${BLUE}[3/3] .gitignore Tests${NC}\n"
+echo -e "\n${BLUE}[3/4] .gitignore Tests${NC}\n"
 
 run_test ".gitignore exists" \
     "[ -f .gitignore ]"
@@ -114,6 +114,23 @@ run_test ".gitignore excludes alert state" \
 
 run_test ".gitignore excludes cache" \
     "grep -q 'cache' .gitignore"
+
+# ============================================
+# DASHBOARD SECURITY TESTS
+# ============================================
+echo -e "\n${BLUE}[4/4] Dashboard Security Tests${NC}\n"
+
+run_test "Dashboard path traversal and auth regression tests" \
+    "python3 tests/test_dashboard_security.py"
+
+run_test "Dashboard server compiles" \
+    "python3 -m py_compile scripts/monitoring/dashboard-server.py"
+
+run_test "Dashboard auth helper exists" \
+    "[ -f scripts/utilities/dashboard_auth.py ]"
+
+run_test "Dashboard path guard exists" \
+    "[ -f scripts/utilities/path_guard.py ]"
 
 # ============================================
 # SCRIPT VALIDATION TESTS

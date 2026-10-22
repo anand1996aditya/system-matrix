@@ -146,12 +146,15 @@ def get_config(config_path=None):
     """
     Get global config instance
     Args:
-        config_path: Optional path to config.json
+        config_path: Optional path to config.json. Defaults to the
+            SYSTEM_MATRIX_CONFIG environment variable when set.
     Returns:
         ConfigLoader instance
     """
     global _config_instance
     if _config_instance is None:
+        if config_path is None:
+            config_path = os.environ.get("SYSTEM_MATRIX_CONFIG") or None
         _config_instance = ConfigLoader(config_path)
     return _config_instance
 

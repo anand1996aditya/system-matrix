@@ -210,6 +210,11 @@ tail -f ~/system-matrix/logs/unified-automation-launchagent.log
 - Have access to your files and credentials
 - Logs may contain sensitive information
 - Make sure log files are protected (chmod 600)
+- The dashboard binds to `127.0.0.1` by default (`services.dashboard.host` in `config/config.json`)
+- Never expose port 8888 directly: HTTP Basic auth needs TLS
+- For remote access, keep the loopback bind and run `tailscale serve --bg 8888`
+  (or a Caddy reverse proxy with TLS). See the main README, "Credentials & Security"
+- The dashboard refuses to start until a password is configured (no default password)
 
 ---
 

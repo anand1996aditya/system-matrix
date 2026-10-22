@@ -322,28 +322,31 @@ update_json() {
     local value="$3"
     local type="${4:-string}"  # string, number, boolean
 
-    python3 -c "
+    # Values travel in environment variables so quotes, '$' and ':' are safe.
+    JSON_FILE="$file" JSON_KEY="$key" JSON_VALUE="$value" JSON_TYPE="$type" python3 -c '
 import json
-import sys
+import os
 
-with open('$file', 'r') as f:
+with open(os.environ["JSON_FILE"], "r") as f:
     config = json.load(f)
 
-keys = '$key'.split('.')
+keys = os.environ["JSON_KEY"].split(".")
 obj = config
 for k in keys[:-1]:
     obj = obj[k]
 
-if '$type' == 'number':
-    obj[keys[-1]] = $value
-elif '$type' == 'boolean':
-    obj[keys[-1]] = $value
+value_type = os.environ["JSON_TYPE"]
+value = os.environ["JSON_VALUE"]
+if value_type == "number":
+    obj[keys[-1]] = int(value)
+elif value_type == "boolean":
+    obj[keys[-1]] = value.lower() == "true"
 else:
-    obj[keys[-1]] = '$value'
+    obj[keys[-1]] = value
 
-with open('$file', 'w') as f:
+with open(os.environ["JSON_FILE"], "w") as f:
     json.dump(config, f, indent=2)
-"
+'
 }
 
 # Get user input
@@ -396,21 +399,20 @@ DASHBOARD_USER=${DASHBOARD_USER:-admin}
 update_json "$CONFIG_FILE" "dashboard_auth.username" "$DASHBOARD_USER"
 
 while true; do
-    echo -n "Enter dashboard password (min 8 characters): "
-    read -s DASHBOARD_PASS
+    echo -n "Enter dashboard password (required, min 8 characters): "
+    read -s DASHBOARD_PASS || { echo; echo -e "${RED}No password provided. Aborting setup.${NC}"; exit 1; }
     echo
 
     if [ -z "$DASHBOARD_PASS" ]; then
-        DASHBOARD_PASS="matrix2026"
-        echo -e "${YELLOW}Using default password: matrix2026 (PLEASE CHANGE THIS!)${NC}"
-        break
+        echo -e "${RED}A dashboard password is required. The server will not start without one.${NC}"
+        continue
     elif [ ${#DASHBOARD_PASS} -lt 8 ]; then
         echo -e "${RED}Password too short. Must be at least 8 characters.${NC}"
         continue
     else
         # Confirm password
         echo -n "Confirm dashboard password: "
-        read -s DASHBOARD_PASS_CONFIRM
+        read -s DASHBOARD_PASS_CONFIRM || { echo; echo -e "${RED}No confirmation provided. Aborting setup.${NC}"; exit 1; }
         echo
 
         if [ "$DASHBOARD_PASS" != "$DASHBOARD_PASS_CONFIRM" ]; then
@@ -421,8 +423,12 @@ while true; do
     fi
 done
 
-# Hash the password
-PASSWORD_HASH=$(echo -n "$DASHBOARD_PASS" | shasum -a 256 | awk '{print $1}')
+# Hash the password with salted PBKDF2-HMAC-SHA256 (600k iterations)
+PASSWORD_HASH=$(printf '%s' "$DASHBOARD_PASS" | python3 "$SCRIPT_DIR/scripts/utilities/dashboard_auth.py" hash)
+if [ -z "$PASSWORD_HASH" ]; then
+    echo -e "${RED}Failed to hash the dashboard password. Aborting setup.${NC}"
+    exit 1
+fi
 update_json "$CONFIG_FILE" "dashboard_auth.password_hash" "$PASSWORD_HASH"
 
 # Backup scripts
@@ -682,7 +688,11 @@ echo "   Or run manually: ${YELLOW}python3 $SCRIPT_DIR/scripts/monitoring/dashbo
 echo "3. Access the dashboard:"
 echo "   ${YELLOW}http://localhost:${DASHBOARD_PORT}${NC}"
 echo "   Username: ${YELLOW}${DASHBOARD_USER}${NC}"
-echo "   Password: ${YELLOW}[your password]${NC}\n"
+echo "   Password: ${YELLOW}[the password you just set]${NC}"
+echo ""
+echo "   The dashboard binds to 127.0.0.1 (local only) by default."
+echo "   Remote access requires TLS: use Tailscale Serve or a Caddy reverse proxy."
+echo "   See README.md: Dashboard Credentials & Security.\n"
 
 echo "4. Test automation manually:"
 echo "   ${YELLOW}$SCRIPT_DIR/scripts/automation/unified-automation.sh${NC}\n"

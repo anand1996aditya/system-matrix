@@ -145,7 +145,7 @@ Forget boring terminal outputs. System Matrix gives you:
 - **Docker** (for Pi-hole, Plex, containers)
 - **External drives** (for backups)
 
-**Security Note:** You'll set up a dashboard password during installation. If you skip it, default credentials (`admin`/`matrix2026`) are used - **change them immediately!** See [Dashboard Credentials](#-dashboard-credentials--security).
+**Security Note:** The setup wizard requires a dashboard password. There is no default password, and the dashboard server refuses to start until one is configured. See [Dashboard Credentials & Security](#-dashboard-credentials--security).
 
 ### Installation
 
@@ -191,22 +191,13 @@ Login with the credentials you set up. 🎉
 
 ## 🔐 Dashboard Credentials & Security
 
-### Default Credentials
+### No Default Credentials
 
-If you skipped setting a password during setup, the system uses these **default credentials**:
+The dashboard ships with **no default password**. The setup wizard requires you to set a password, and the server refuses to start if `dashboard_auth.password_hash` is missing or still a placeholder.
 
-```
-Username: admin
-Password: matrix2026
-```
-
-**⚠️ CRITICAL SECURITY NOTICE:**
-
-These default credentials are **publicly documented** in `config/config.template.json`. You **MUST** change them immediately after your first login!
+Passwords are stored as a **salted PBKDF2-HMAC-SHA256** hash (600,000 iterations). Old unsalted SHA-256 hashes are accepted only for migration; change the password once to upgrade it.
 
 ### How to Change Your Password
-
-#### Method 1: Using the Script (Recommended)
 
 Run the password change utility:
 
@@ -219,39 +210,58 @@ The script will:
 - Prompt for a new username (optional)
 - Ask for a new password (min 8 characters)
 - Confirm the password
-- Update your configuration automatically
+- Write a salted PBKDF2 hash to `config/config.json`
 - Restart the dashboard service
 
-#### Method 2: Manual Configuration
-
-Edit `config/config.json` and update the `dashboard_auth` section:
+To set the password by hand, write a PBKDF2 hash. Do not use an unsalted SHA-256 hash:
 
 ```bash
-# 1. Generate a SHA-256 hash of your new password
-echo -n "YourNewPassword" | shasum -a 256
-
-# 2. Edit config.json
-nano config/config.json
-
-# 3. Update these fields:
-{
-  "dashboard_auth": {
-    "username": "your_new_username",
-    "password_hash": "your_generated_hash_here"
-  }
-}
-
-# 4. Restart the dashboard
-pkill -f dashboard-server.py
-python3 scripts/monitoring/dashboard-server.py
+printf '%s' "YourNewPassword" | python3 scripts/utilities/dashboard_auth.py hash
 ```
+
+Paste the output into `dashboard_auth.password_hash`, then restart the dashboard.
 
 **Security Best Practices:**
 
 ✅ Use a **strong password** (12+ characters, mix of letters, numbers, symbols)
-✅ Change credentials **immediately** after first setup
+✅ Set the password **during setup**; the server will not start without it
 ✅ Never share your `config/config.json` file (it's git-ignored for security)
 ✅ Consider using a **password manager** to generate and store credentials
+
+### Network Exposure and Remote Access
+
+By default the dashboard binds to `127.0.0.1` and is reachable only from the same Mac:
+
+```json
+"services": {
+  "dashboard": {
+    "host": "127.0.0.1",
+    "port": 8888
+  }
+}
+```
+
+Do **not** expose port 8888 directly. Dashboard login is HTTP Basic auth, so it needs TLS.
+For remote access, keep the loopback bind and put a TLS proxy in front.
+
+**Tailscale Serve (recommended):**
+
+```bash
+tailscale serve --bg 8888
+# Open the printed https://<machine>.<tailnet>.ts.net URL
+```
+
+**Caddy example (`/etc/caddy/Caddyfile`):**
+
+```
+dashboard.example.com {
+    reverse_proxy 127.0.0.1:8888
+}
+```
+
+When a TLS proxy runs on the same Mac and you want real client IPs in the login lockout,
+set `dashboard_auth.trust_proxy` to `true`. Otherwise the server uses the socket peer
+address, which clients cannot spoof with `X-Forwarded-For`.
 
 **What's Protected:**
 
@@ -261,6 +271,12 @@ The password protects access to:
 - Service controls
 - Alert history
 - System information
+
+**Other built-in protections:**
+- File browser paths resolve inside the configured drives; `..` and escaping symlinks are rejected
+- State-changing POST requests require the `X-Requested-With: SystemMatrix` header (CSRF guard)
+- CORS allows only the dashboard's own origin
+- Failed logins lock the client IP after the configured number of attempts
 
 ---
 
@@ -352,10 +368,11 @@ config/config.template.json # Safe template (in git, has placeholders)
 {
   "dashboard_auth": {
     "username": "admin",                       // Dashboard username
-    "password_hash": "sha256_hash_here",       // Password (hashed)
+    "password_hash": "pbkdf2_sha256$...",      // Salted PBKDF2 hash (required)
     "session_timeout_minutes": 60,            // Auto-logout after 1 hour
     "max_failed_attempts": 3,                 // Lockout after 3 failed logins
-    "lockout_duration_seconds": 180           // 3 min lockout
+    "lockout_duration_seconds": 180,          // 3 min lockout
+    "trust_proxy": false                      // true only behind a TLS proxy
   },
 
   "alerts": {
@@ -382,7 +399,7 @@ config/config.template.json # Safe template (in git, has placeholders)
   "services": {
     "dashboard": {
       "port": 8888,                           // Dashboard port
-      "host": "0.0.0.0",                      // Listen on all interfaces
+      "host": "127.0.0.1",                    // Loopback; use a TLS proxy for remote
       "auth_required": true                   // Require login (recommended)
     }
   }
@@ -390,10 +407,11 @@ config/config.template.json # Safe template (in git, has placeholders)
 ```
 
 **Pro tips:**
-- 🔐 **Change default credentials** - see [Dashboard Credentials section](#-dashboard-credentials--security)
+- 🔐 **Set a strong password during setup** - see [Dashboard Credentials section](#-dashboard-credentials--security)
 - 🎯 Services and drives are **auto-detected** - no hardcoding needed!
 - 📝 Default config is documented in `config/config.template.json`
 - 🔒 Your `config.json` is **never tracked by git** - safe to put secrets there
+- 🌐 Keep `host` on `127.0.0.1`; remote access needs TLS (Tailscale Serve or Caddy)
 
 ---
 
@@ -471,11 +489,7 @@ Services are auto-detected! Just install the service (Docker, Plex, whatever) an
 
 **Can't login to dashboard?**
 ```bash
-# Check if you're using default credentials
-Username: admin
-Password: matrix2026
-
-# Reset your password
+# There is no default password. Set or reset it:
 ./scripts/utilities/change-dashboard-password.sh
 
 # Check config file exists
@@ -487,6 +501,9 @@ grep -A 2 "dashboard_auth" config/config.json
 
 **Dashboard won't start?**
 ```bash
+# Confirm a password was set (the server refuses to start without one)
+grep "password_hash" config/config.json
+
 # Check if port 8888 is already in use
 lsof -i :8888
 
@@ -703,8 +720,8 @@ system-matrix/                    # 58 files (cleaned up, production-ready)
 ### Credential Protection
 - 🔐 **No hardcoded secrets** - all credentials in git-ignored config files
 - 🚫 **Impossible to commit secrets** - pre-commit hooks block accidental commits
-- 🔑 **Password hashing** - SHA-256 for dashboard authentication
-- ⚠️ **Default credential warnings** - documented and must be changed (see [Dashboard Credentials](#-dashboard-credentials--security))
+- 🔑 **Password hashing** - salted PBKDF2-HMAC-SHA256 for dashboard authentication
+- 🚫 **No default password** - the server refuses to start until one is configured
 - 🛡️ **Config separation** - template (public) vs actual config (private)
 
 ### Validation & Scanning
@@ -715,15 +732,18 @@ system-matrix/                    # 58 files (cleaned up, production-ready)
 - 🎯 **Path validation** - ensures all file paths exist and are accessible
 
 ### Runtime Security
-- 🔒 **Password protected dashboard** - authentication required by default
+- 🔒 **Password protected dashboard** - authentication required, no defaults
+- 🏠 **Loopback bind by default** - remote access through a TLS proxy only
+- 🛡️ **Path containment** - file browser rejects `..` traversal and symlink escapes
+- 🧷 **CSRF guard** - state-changing POSTs need the custom request header
 - ⏱️ **Session timeouts** - auto-logout after inactivity
-- 🚷 **Rate limiting** - brute force protection (3 attempts, 3 min lockout)
+- 🚷 **Rate limiting** - brute force protection (3 attempts, 3 min lockout) keyed on the socket peer
 - 🎭 **Auto-detection only** - no assumed services or hardcoded paths
 - 📊 **Alert monitoring** - SSH brute force, port exposure, failed logins
 
 ### Best Practices
-- ✅ Change default credentials immediately (username: `admin`, password: `matrix2026`)
-- ✅ Use strong passwords (12+ characters, mixed case, numbers, symbols)
+- ✅ Set a strong dashboard password during setup (12+ characters, mixed case, numbers, symbols)
+- ✅ Keep the dashboard on `127.0.0.1`; use Tailscale Serve or Caddy with TLS for remote access
 - ✅ Never share `config/config.json` (contains your secrets)
 - ✅ Run security tests before pushing: `./tests/pre-push-validation.sh`
 - ✅ Keep your Telegram bot token private
