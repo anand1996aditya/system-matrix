@@ -49,7 +49,7 @@ jobs:
         fi
 
         # Check if .dashboard_auth exists in repo (it shouldn't)
-        if git ls-files | grep -q ".dashboard_auth"; then
+        if git ls-files | grep -qE "(^|/)\.dashboard_auth$"; then
           echo "❌ .dashboard_auth is tracked by git!"
           exit 1
         fi
